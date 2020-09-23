@@ -15,7 +15,12 @@ public class MovePredictor {
         this.simPrinter = simPrinter;
     }
 
+    public void quickMethod(String str) {
+        simPrinter.println(str);
+    }
+
     public void trackData(Map<Integer, List<Game>> opponentGamesMap) {
+        simPrinter.println("### MovePredictor TRACKING DATA ###");
         if (teamTrackers.size() == 0) {
             for (Map.Entry<Integer,List<Game>> entry : opponentGamesMap.entrySet()) {
                 TeamTracker teamTracker = new TeamTracker(entry.getKey(), entry.getValue());
@@ -28,8 +33,9 @@ public class MovePredictor {
         }
     }
 
-    public Move getMostProbableNextMove(int teamId, Game game) {
-        Map<Move, Double> nextMoveProbs = getNextMoveProbs(teamId, game);
+    public Move getMostProbableNextMove(Game game) {
+        int teamId = game.getID();
+        Map<Move, Double> nextMoveProbs = getNextMoveProbs(game);
         Move nextMove = Move.NO_CHANGE;
         double prob = 0;
         for (Map.Entry<Move, Double> entry : nextMoveProbs.entrySet()) {
@@ -41,7 +47,8 @@ public class MovePredictor {
         return nextMove;
     }
 
-    public Map<Move, Double> getNextMoveProbs(int teamId, Game game) {
+    public Map<Move, Double> getNextMoveProbs(Game game) {
+        int teamId = game.getID();
         TeamTracker teamTracker = teamTrackers.get(teamId);
         return teamTracker.getNextMoveProbs(game);
     }
