@@ -9,9 +9,6 @@
 src/*.class
 src/*/*.class
 
-# Makefile
-src/Makefile
-
 # Bin folder
 bin/
 
