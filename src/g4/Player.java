@@ -1,8 +1,6 @@
 package g4;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import sim.Game;
 import sim.GameHistory;
@@ -15,6 +13,7 @@ public class Player extends sim.Player {
 	private int threshold;
 	private SimPrinter simPrinter;
 	private int teamId;
+
 	/**
 	 * Player constructor
 	 *
@@ -46,24 +45,44 @@ public class Player extends sim.Player {
 	 */
 	public List<Game> reallocate(Integer round, GameHistory gameHistory, List<Game> playerGames,
 			Map<Integer, List<Game>> opponentGamesMap) {
-		//pointPredictor.trackData(opponentGamesMap);
-
 		List<Game> reallocatedPlayerGames = new ArrayList<>();
+		Map<Integer, Double> currentAverages = gameHistory.getAllAverageRankingsMap().get(round);
+		double g4MeanRanking = currentAverages.get(this.teamID);
+		LinkedHashMap<Integer, Double> sortedRanks = new LinkedHashMap<>();
+ 
+		sortedRanks.entrySet()
+			.stream()
+			.sorted(Map.Entry.comparingByValue())
+			.forEachOrdered(x -> sortedRanks.put(x.getKey(), x.getValue()));
+		
+		List<Double> rankList = new ArrayList<Double>(sortedRanks.values());
+		
+		// pointPredictor.trackData(opponentGamesMap);
 
-		List<Game> wonGames = getWinningGames(playerGames);
-		List<Game> drawnGames = getDrawnGames(playerGames);
-		List<Game> lostGames = getLosingGames(playerGames);
-		List<Integer> targetTeamID = reallocateLeapFrog(round, gameHistory, playerGames, opponentGamesMap);
+		// List<Game> reallocatedPlayerGames = new ArrayList<>();
+
+		// List<Game> wonGames = getWinningGames(playerGames);
+		// List<Game> drawnGames = getDrawnGames(playerGames);
+		// List<Game> lostGames = getLosingGames(playerGames);
+		if (0 < rankList.indexOf(g4MeanRanking) && rankList.indexOf(g4MeanRanking) < 5) {
+			reallocatedPlayerGames = attackHigherRanks(round, gameHistory, playerGames, opponentGamesMap);
+		}
+		else {
+			reallocatedPlayerGames = reallocateLeapFrog(round, gameHistory, playerGames, opponentGamesMap);
+		}
+		//List<Game> leapfrogGames = reallocateLeapFrog(round, gameHistory, playerGames, opponentGamesMap);
+		//List<Game> attackHigherRankGames = attackHigherRanks(round, gameHistory, playerGames, opponentGamesMap);
 
 		// System.out.println("Reallocating goals");
-		calculateBank(wonGames, targetTeamID.get(0), targetTeamID.get(1));
-		this.movePredictor.trackData(opponentGamesMap);
+		//calculateBank(wonGames, targetTeamID.get(0), targetTeamID.get(1));
+		//this.movePredictor.trackData(opponentGamesMap);
 		// System.out.println(this.goalBank);
 		// System.out.println("Bank:" + goalBank);
-		transferGoalsToLostGames(lostGames);
-		transferGoalsToDrawnGames(drawnGames);
+		//transferGoalsToLostGames(lostGames);
+		//transferGoalsToDrawnGames(drawnGames);
 
 		// adjust winning games score
+		/*
 		int goalsTakenFromWins = 0;
 		for (Game winningGame : wonGames) {
 			goalsTakenFromWins += winningGame.getNumPlayerGoals() - winningGame.getNumOpponentGoals() - 1;
@@ -79,33 +98,182 @@ public class Player extends sim.Player {
 		if (checkConstraintsSatisfied(playerGames, reallocatedPlayerGames))
 			return reallocatedPlayerGames;
 
+		return playerGames; */
+		//return leapfrogGames;
+		return reallocatedPlayerGames;
+	}
+
+	public List<Game> reallocateLeapFrog(Integer round, GameHistory gameHistory, List<Game> playerGames,
+			Map<Integer, List<Game>> opponentGamesMap) {
+
+		Map<Integer, Double> currentAverages = gameHistory.getAllAverageRankingsMap().get(round);
+		List<Integer> nearestTeams = sortGamesByAverageRanking(currentAverages);
+		double g4MeanRanking = currentAverages.get(this.teamID);
+
+		int reallocateRadius = 3;
+
+		List<Game> wonGames = getWinningGames(playerGames);
+		List<Game> drawnGames = getDrawnGames(playerGames);
+		List<Game> lostGames = getLosingGames(playerGames);
+		List<Integer> gameIDGoalReserviorException = new ArrayList<>();
+		for (Integer team : nearestTeams) {
+			List<Game> targetGame = opponentGamesMap.get(team);
+			for(Game game: targetGame){
+				if(wonGames.contains(game)){
+					gameIDGoalReserviorException.add(game.getID());
+				} 
+			}
+		}
+		for (Game wonGame : wonGames){
+			if(!gameIDGoalReserviorException.contains(wonGame.getID())){
+				int numPlayerGoals = wonGame.getNumPlayerGoals();
+				int numOpponentGoals = wonGame.getNumOpponentGoals();
+				this.goalBank += numPlayerGoals - numOpponentGoals - 1;
+			}
+		}
+		for(Integer targetTeam: nearestTeams){
+			Game currentGame = getGameFromOpponentID(targetTeam, opponentGamesMap, playerGames);
+			int lostBy = currentGame.getNumOpponentGoals() - currentGame.getNumPlayerGoals();
+			int goalsToAdd = lostBy + 1;
+			if (goalBank >= goalsToAdd) {
+				currentGame = transferFromBank(currentGame, goalsToAdd);
+				this.goalBank -= goalsToAdd;
+			} else {
+				currentGame = transferFromBank(currentGame, goalBank);
+				this.goalBank = 0;
+			}
+			for(Game played: playerGames){
+				if(played.getID().equals(currentGame.getID())){
+					playerGames.set(playerGames.indexOf(played), currentGame);
+				}
+			}
+		}
+
 		return playerGames;
 	}
 
-	public List<Integer> reallocateLeapFrog(Integer round, GameHistory gameHistory, List<Game> playerGames,
-			Map<Integer, List<Game>> opponentGamesMap) {
-			Map<Integer, Double> currentAverages = gameHistory.getAllAverageRankingsMap().get(round);
-			double nextSmallest = Integer.MAX_VALUE;
-			int nextSmallestId = 0;
-			double nextLargest = Integer.MIN_VALUE;
-			int nextLargestId = 0;
-			double currentTeam = currentAverages.get(this.teamId);
-			for(Map.Entry<Integer, Double> entry : currentAverages.entrySet()){
-				if(entry.getValue() <= currentTeam){
-					if(nextSmallest > entry.getValue() && entry.getKey() != this.teamId){
-						nextSmallest = entry.getValue();
-					}
-				} else {
-					if(nextLargest < entry.getValue() && entry.getKey() != this.teamId){
-						nextLargest = entry.getValue();
-					}
-				}
-				this.simPrinter.println(entry.getValue());
+	public Game getGameFromOpponentID(Integer targetTeam, Map<Integer, List<Game>> opponentGamesMap, List<Game> playerGames){
+		for(Game opponentGame: opponentGamesMap.get(targetTeam)){
+			if(playerGames.contains(opponentGame)){
+				return opponentGame;
 			}
-			List<Integer> teams = new ArrayList<Integer>();
-			teams.add(nextLargestId);
-			teams.add(nextSmallestId);
-			return teams;
+		}
+		return null;
+	}
+
+	public List<Integer> sortGamesByAverageRanking(Map<Integer, Double> currentRankingAverages) {
+		Double g4Ranking = currentRankingAverages.get(this.teamID);
+//		Map<Integer, Double> unsortedMap = new HashMap<>(currentRankingAverages);
+		LinkedHashMap<Integer, Double> sortedMap = new LinkedHashMap<>();
+		sortedMap.remove(this.teamID);
+		Set<Integer> keys = sortedMap.keySet();
+
+		for( Integer key: keys){
+			double relativeMeanRanking = currentRankingAverages.get(key);
+			relativeMeanRanking -= g4Ranking;
+			currentRankingAverages.replace(key, Math.abs(relativeMeanRanking));
+		}
+
+		currentRankingAverages.entrySet()
+			.stream()
+			.sorted(Map.Entry.comparingByValue())
+			.forEachOrdered(team -> sortedMap.put(team.getKey(), team.getValue()));
+
+		return new ArrayList<Integer>(sortedMap.keySet());
+	}
+
+	// algorithm #2:
+	// induce losses for higher ranked teams
+	// risk losing to teams that are lower ranked
+	// don't use this algorithm when player is rank 1
+	// TODO: figure out the highest rank at which you would want to use this
+	// algorithm
+	// TODO: figure out how many teams above you want to attack (1 at the moment)
+	// TODO: figure out how many teams below you are willing to lose against (1 at
+	// the moment)
+	public List<Game> attackHigherRanks(Integer round, GameHistory gameHistory, List<Game> playerGames,
+			Map<Integer, List<Game>> opponentGamesMap) {
+
+		List<Game> reallocatedPlayerGames = new ArrayList<>();
+		List<Game> wonGames = getWinningGames(playerGames);
+		List<Game> drawnGames = getDrawnGames(playerGames);
+		List<Game> lostGames = getLosingGames(playerGames);
+
+		Double highestRank = Double.MIN_VALUE;
+		Double lowestRank = Double.MAX_VALUE;
+		int highestRankTeam = 0;
+		int lowestRankTeam = 0;
+		Map<Integer, Double> currentAverages = gameHistory.getAllAverageRankingsMap().get(round);
+		List<Double> highRankedTeams = new ArrayList<Double>();
+		List<Double> lowRankedTeams = new ArrayList<Double>();
+		double playerRank = currentAverages.get(this.teamId);
+		int goalsTakenFromLowest = 0;
+
+		int numGoalsToReallocate = 0;
+
+		for (Map.Entry<Integer, Double> entry : currentAverages.entrySet()) {
+			if (entry.getValue() < playerRank) {
+				if (lowestRank > entry.getValue()) {
+					lowestRankTeam = entry.getKey();
+				}
+			} else {
+				if (highestRank < entry.getValue()) {
+					highestRankTeam = entry.getKey();
+				}
+			}
+		}
+
+		Game lowestRankGame = getGameFromOpponentID(lowestRankTeam, opponentGamesMap, playerGames);
+		Game highestRankGame = getGameFromOpponentID(highestRankTeam, opponentGamesMap, playerGames);
+
+		for (Game winningGame : wonGames) {
+			if (lowestRankGame == winningGame) {
+				System.out.println("Nice");
+				this.goalBank += winningGame.getHalfNumPlayerGoals();
+				goalsTakenFromLowest += winningGame.getHalfNumPlayerGoals();
+				winningGame.setNumPlayerGoals(winningGame.getNumPlayerGoals() - winningGame.getHalfNumPlayerGoals());
+			}
+			else {
+				this.goalBank += winningGame.getNumPlayerGoals() - winningGame.getNumOpponentGoals() - 1;
+				winningGame.setNumPlayerGoals(winningGame.getNumOpponentGoals() + 1);
+			}
+		}
+
+		for (Game losingGame : lostGames) {
+			if (highestRankGame == losingGame) {
+				losingGame.setNumPlayerGoals(losingGame.getNumPlayerGoals() + goalsTakenFromLowest);
+				this.goalBank -= goalsTakenFromLowest;
+			}
+			else {
+				int lostBy = losingGame.getNumOpponentGoals() - losingGame.getNumPlayerGoals();
+				int goalsToAdd = lostBy + 1;
+				if (goalBank >= goalsToAdd) {
+					transferFromBank(losingGame, goalsToAdd);
+					this.goalBank -= goalsToAdd;
+				} else {
+					transferFromBank(losingGame, goalBank);
+					this.goalBank = 0;
+				}
+			}
+		}
+
+		for (Game drawnGame : drawnGames) {
+			if (goalBank > 0) {
+				transferFromBank(drawnGame, 1);
+				this.goalBank--;
+			}
+		}
+
+		reallocatedPlayerGames.addAll(lostGames);
+		reallocatedPlayerGames.addAll(drawnGames);
+		reallocatedPlayerGames.addAll(wonGames);
+
+		// check constraints and return
+		if (checkConstraintsSatisfied(playerGames, reallocatedPlayerGames)) {
+			return reallocatedPlayerGames;
+		}
+
+		return playerGames;
 	}
 
 	/**
@@ -119,7 +287,8 @@ public class Player extends sim.Player {
 			int numPlayerGoals = game.getNumPlayerGoals();
 			int numOpponentGoals = game.getNumOpponentGoals();
 			this.goalBank += numPlayerGoals - numOpponentGoals - 1;
-//			System.out.println(game.getID() + ": " + this.goalBank + " " + numPlayerGoals + " " + numOpponentGoals);
+			// System.out.println(game.getID() + ": " + this.goalBank + " " + numPlayerGoals
+			// + " " + numOpponentGoals);
 
 		}
 	}
@@ -194,10 +363,11 @@ public class Player extends sim.Player {
 		});
 	}
 
-	private void transferFromBank(Game game, int goals) {
+	private Game transferFromBank(Game game, int goals) {
 		goalBank -= goals;
 		int currentGoals = game.getNumPlayerGoals();
 		game.setNumPlayerGoals(currentGoals + goals);
+		return game;
 	}
 
 	// only used for internal testing

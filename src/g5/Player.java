@@ -24,6 +24,20 @@ public class Player extends sim.Player {
         super(teamID, rounds, seed, simPrinter);
     }
 
+    // get game IDs where opponents have higher ranks
+    public List<Integer> getGamesToBeatIDs(Integer round, GameHistory gameHistory) {
+        List<Integer> gamesToBeat = new ArrayList<Integer>();
+        Map<Integer, Double> rankings = gameHistory.getAllAverageRankingsMap().get(round-1);
+
+        for (Map.Entry<Integer, Double> ranking : rankings.entrySet()) {
+            Integer otherTeamID = ranking.getKey();
+            if (!otherTeamID.equals(teamID) && ranking.getValue() <= rankings.get(teamID)) {
+                gamesToBeat.add(otherTeamID);
+            }
+        }
+        return gamesToBeat;
+    }
+
     /**
      * Reallocate player goals
      *
@@ -38,6 +52,12 @@ public class Player extends sim.Player {
     public List<Game> reallocate(Integer round, GameHistory gameHistory, List<Game> playerGames,
                                  Map<Integer, List<Game>> opponentGamesMap) {
 
+
+        List<Integer> gamesToBeat = new ArrayList<Integer>();
+        if (round > 1) {
+            // get game IDs where opponents have higher ranks
+            gamesToBeat = getGamesToBeatIDs(round, gameHistory);
+        }
 
         ArrayList<Game> reallocatedGames = new ArrayList<Game>();
 
@@ -89,10 +109,15 @@ public class Player extends sim.Player {
         List<Game> losingAndDraw = new ArrayList<Game>();
 
         for (Game g : clonePlayerGames) {
-            int gm = g.getNumPlayerGoals()-g.getNumOpponentGoals();
+            int playerGoals = g.getNumPlayerGoals();
+            int gm = playerGoals-g.getNumOpponentGoals();
             Game origin = findSameGameID(playerGames, g.getID()).cloneGame();
             if (gm > 0) {
-                origin.setNumPlayerGoals(g.getNumPlayerGoals());
+                if (playerGoals < origin.getMaxGoalThreshold() && gamesToBeat.contains(g.getID())) {
+                    excessGoals -= 1;
+                    playerGoals += 1;
+                }
+                origin.setNumPlayerGoals(playerGoals);
                 reallocatedGames.add(origin);
             }
             else if (excessGoals >= -gm+1) {
@@ -102,6 +127,10 @@ public class Player extends sim.Player {
                     excessGoals -= origin.getMaxGoalThreshold() - origin.getNumPlayerGoals();
                 }
                 else {
+                    if (excessGoals > -gm+1 && gamesToBeat.contains(g.getID())) {
+                        excessGoals -= 1;
+                        goals += 1;
+                    }
                     origin.setNumPlayerGoals(goals);
                     excessGoals -= -gm+1;
                 }
@@ -123,6 +152,12 @@ public class Player extends sim.Player {
                     break;
                 }
                 if (g.getNumPlayerGoals() < g.getMaxGoalThreshold()) {
+                    g.setNumPlayerGoals(g.getNumPlayerGoals()+1);
+                    excessGoals -= 1;
+                }
+                if (g.getNumPlayerGoals() < g.getMaxGoalThreshold()
+                        && excessGoals > 0
+                        && gamesToBeat.contains(g.getID())) {
                     g.setNumPlayerGoals(g.getNumPlayerGoals()+1);
                     excessGoals -= 1;
                 }

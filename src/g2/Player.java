@@ -40,96 +40,226 @@ public class Player extends sim.Player {
           List<Game> wonGames = getWinningGames(playerGames);
           List<Game> drawnGames = getDrawnGames(playerGames);
           List<Game> lostGames = getLosingGames(playerGames);
+          Map<Integer, Integer> goalsTaken = new HashMap<Integer, Integer>();
 
-          List<Game> lostOrDrawnGamesWithReallocationCapacity = new ArrayList<>(lostGames);
-          lostOrDrawnGamesWithReallocationCapacity.addAll(drawnGames);
-          for(Game lostGame : lostGames) {
-               if (lostGame.maxPlayerGoalsReached()) {
-                    lostOrDrawnGamesWithReallocationCapacity.remove(lostGame);
-               }
+          int goalsToReallocate = 0;
+          int excessGoals = 0;
+          int mustWinMargin = 2;
+
+          double ran = Math.random();
+          if (ran>0.1){
+            mustWinMargin = 2;
           }
-          for(Game drawnGame : drawnGames) {
-               if (drawnGame.maxPlayerGoalsReached()) {
-                    lostOrDrawnGamesWithReallocationCapacity.remove(drawnGame);
-               }
+          else {
+            mustWinMargin = 3;
+          } 
+          int drawtoLoss = 7;
+          int mustLossMargin = 7;
+
+          List<Game> lostGamesWithReallocationCapacity = new ArrayList<>(lostGames);
+          List<Game> lostOrDrawnGames = new ArrayList<>(lostGames);
+          lostOrDrawnGames.addAll(drawnGames);
+          List<Game> drawnGamesWithReallocationCapacity = new ArrayList<>(drawnGames);
+
+          for(Game drawGame : drawnGames){
+            if(drawGame.getNumPlayerGoals() >= drawtoLoss){
+              if (ran>0.01){
+                int numGoals = drawGame.getHalfNumPlayerGoals();
+
+                drawGame.setNumPlayerGoals(drawGame.getNumPlayerGoals() - numGoals);
+                goalsToReallocate += numGoals;
+              }
+              drawnGamesWithReallocationCapacity.remove(drawGame);
+            } 
+            else {
+              int numGoals = drawGame.getHalfNumPlayerGoals();
+
+              drawGame.setNumPlayerGoals(drawGame.getNumPlayerGoals() - numGoals);
+              excessGoals += numGoals;
+            }
+          }
+
+          for(Game lostGame : lostGames){
+            int margin = lostGame.getNumOpponentGoals() - lostGame.getNumPlayerGoals();
+            if(margin >= mustLossMargin){
+              lostGamesWithReallocationCapacity.remove(lostGame);
+            }
+          }
+
+          for(Game winGame: wonGames){
+            int margin = winGame.getNumPlayerGoals() - winGame.getNumOpponentGoals();
+            if(margin == mustWinMargin){
+              goalsTaken.put(winGame.getID(), 0);
+            }
+            else if(margin > mustWinMargin){
+              int halfNumPlayerGoals = winGame.getHalfNumPlayerGoals();
+              int numGoals = (int) Math.min(halfNumPlayerGoals, margin - mustWinMargin);
+
+              winGame.setNumPlayerGoals(winGame.getNumPlayerGoals() - numGoals);
+              goalsToReallocate += numGoals;
+              goalsTaken.put(winGame.getID(), numGoals);
+            }
+            else {
+              int numGoals = winGame.getHalfNumPlayerGoals();
+
+              winGame.setNumPlayerGoals(winGame.getNumPlayerGoals() - numGoals);
+              goalsToReallocate += numGoals;
+              if (margin > 1){
+                goalsTaken.put(winGame.getID(), numGoals);
+              }
+              else{
+                goalsTaken.put(winGame.getID(), 0);
+              }
+            }
           }
 
           if(!gameHistory.getAllGamesMap().isEmpty() && !gameHistory.getAllAverageRankingsMap().isEmpty()) {
-               List<Double> averageRank = new ArrayList<Double>(gameHistory.getAllAverageRankingsMap().get(round-1).values());
-               for(int i = 0; i < 9; i++) {
-                    int opoID = i;
-                    if(i >= teamID) opoID = opoID + 1;
-                    Double opoRank = averageRank.get(opoID);
-                    Double ourRank = averageRank.get(teamID);
-                    rankedMap.put(gameHistory.getAllGamesMap().get(round - 1).get(teamID).get(i).getID(),(Math.abs(ourRank-opoRank)));
-                    rankedMapS.put(gameHistory.getAllGamesMap().get(round - 1).get(teamID).get(i).getID(),gameHistory.getAllGamesMap().get(round - 1).get(teamID).get(i).getScoreAsString());
-               }
-               //System.out.println(rankedMapS);
-               //System.out.println(gameHistory.getAllGamesMap().get(round - 1).get(teamID).get(8).getNumOpponentGoals());
+            List<Double> averageRank = new ArrayList<Double>(gameHistory.getAllAverageRankingsMap().get(round-1).values());
+            for(int i = 0; i < 9; i++) {
+              int opoID = i;
+              if(i >= teamID-1) {opoID = opoID + 1;}
+              Double opoRank = averageRank.get(opoID);
+              Double ourRank = averageRank.get(teamID-1);
+
+              rankedMap.put(gameHistory.getAllGamesMap().get(round - 1).get(teamID).get(i).getID(),(Math.abs(ourRank-opoRank)));
+            }
           }
 
-//          if(!gameHistory.getAllAverageRankingsMap().isEmpty()) {
-//
-//               List<Double> averageRank = new ArrayList<Double>(gameHistory.getAllAverageRankingsMap().get(round-1).values());
-//
-//
-//               System.out.println(averageRank);
-//
-//               //Collections.sort(averageRank);
-//
-//               System.out.println(averageRank);
-//               System.out.println(gameHistory.getAllAverageRankingsMap().get(round-1));
-//          }
 
+          Comparator<Game> rangeComparatorLoss = (Game g1, Game g2) ->
+          {return (g1.getNumOpponentGoals()-g1.getNumPlayerGoals()) - (g2.getNumOpponentGoals()-g2.getNumPlayerGoals());};
           Comparator<Game> rangeComparatorWon = (Game g1, Game g2) ->
           {return (g1.getNumPlayerGoals()-g1.getNumOpponentGoals()) - (g2.getNumPlayerGoals()-g2.getNumOpponentGoals());};
           Comparator<Game> rangeComparatorRank = (Game g1, Game g2) ->
           {return (int) Math.round((rankedMap.get(g1.getID()) - rankedMap.get(g2.getID()))*1000);};
 
-          Collections.sort(wonGames, rangeComparatorWon.reversed());
 
-          if(round > rounds/4) {
-               Collections.sort(lostOrDrawnGamesWithReallocationCapacity, rangeComparatorRank.reversed());
+          for (Game loss : lostGamesWithReallocationCapacity) {
+            if (loss.getNumOpponentGoals() - loss.getNumPlayerGoals() <=2){
+              if(goalsToReallocate >1 ){
+                if(loss.getNumPlayerGoals() == 7){
+                  loss.setNumPlayerGoals(loss.getNumPlayerGoals() + 1);
+                  goalsToReallocate -= 1;
+                }
+                loss.setNumPlayerGoals(loss.getNumPlayerGoals() + 2);
+                goalsToReallocate -= 2;
+              }
+              else {
+                loss.setNumPlayerGoals(loss.getNumPlayerGoals() + goalsToReallocate);
+                goalsToReallocate = 0;
+              }
+            }
+            else if (loss.getNumOpponentGoals() - loss.getNumPlayerGoals() <=4){
+              if(goalsToReallocate > 2){
+                loss.setNumPlayerGoals(loss.getNumPlayerGoals() + 3);
+                goalsToReallocate -= 3;
+              }
+              else {
+                loss.setNumPlayerGoals(loss.getNumPlayerGoals() + goalsToReallocate);
+                goalsToReallocate = 0;
+              }
+            }
+            else{
+              if(goalsToReallocate > 3){
+                loss.setNumPlayerGoals(loss.getNumPlayerGoals() + 4);
+                goalsToReallocate -= 4;
+              }
+              else {
+                loss.setNumPlayerGoals(loss.getNumPlayerGoals() + goalsToReallocate);
+                goalsToReallocate = 0;
+              }
+            }
           }
 
-          int i = 0;
-          for(Game lossOrDrew : lostOrDrawnGamesWithReallocationCapacity) {
-               //System.out.println(lossOrDrew.getID() + " " + lossOrDrew.getScoreAsString());
-               int rangeWon = Math.min((wonGames.get(i).getNumPlayerGoals()-wonGames.get(i).getNumOpponentGoals()),
-                       wonGames.get(i).getHalfNumPlayerGoals());
-               int rangeLD = lossOrDrew.getNumOpponentGoals() - lossOrDrew.getNumPlayerGoals();
-               if(rangeLD < rangeWon && lossOrDrew.getNumPlayerGoals() + rangeLD + 1 <= 8) {
-                    lossOrDrew.setNumPlayerGoals(lossOrDrew.getNumPlayerGoals() + rangeLD + 1);
-                    wonGames.get(i).setNumPlayerGoals(wonGames.get(i).getNumPlayerGoals() - rangeLD - 1);
-                    //lostOrDrawnGamesWithReallocationCapacity.remove(lossOrDrew);
-                    i += 1;
-               }
+          if(excessGoals != 0) {
+            try{
+              if (drawnGamesWithReallocationCapacity.size() > 1){
+                Collections.sort(drawnGamesWithReallocationCapacity, rangeComparatorRank);
+              }  
+            }
+            catch(Exception e){
+              System.out.println(e);
+            }
+            excessGoals += goalsToReallocate;
+            goalsToReallocate = 0;
+
+            for(Game draw : drawnGamesWithReallocationCapacity){
+              int goalsToWin = draw.getNumOpponentGoals() - draw.getNumPlayerGoals() + 2;
+              if(excessGoals > goalsToWin){
+                draw.setNumPlayerGoals(draw.getNumPlayerGoals() + goalsToWin);
+                excessGoals -= goalsToWin;
+              }
+              else {
+                draw.setNumPlayerGoals(draw.getNumPlayerGoals() + excessGoals);
+                excessGoals = 0;
+              }
+            }
+
           }
 
-          Collections.sort(lostOrDrawnGamesWithReallocationCapacity, rangeComparatorWon);
-          Collections.sort(wonGames, rangeComparatorWon.reversed());
+          excessGoals += goalsToReallocate;
+          goalsToReallocate = 0;
 
-          i = 0;
-          for(Game lossOrDrew : lostOrDrawnGamesWithReallocationCapacity) {
-               //System.out.println(lossOrDrew.getID() + " " + lossOrDrew.getScoreAsString());
-               int rangeWon = Math.min((wonGames.get(i).getNumPlayerGoals()-wonGames.get(i).getNumOpponentGoals()),
-                       wonGames.get(i).getHalfNumPlayerGoals());
-               int rangeLD = lossOrDrew.getNumOpponentGoals() - lossOrDrew.getNumPlayerGoals();
-               if(rangeLD < rangeWon && lossOrDrew.getNumPlayerGoals() + rangeLD + 1 <= 8) {
-                    lossOrDrew.setNumPlayerGoals(lossOrDrew.getNumPlayerGoals() + rangeLD + 1);
-                    wonGames.get(i).setNumPlayerGoals(wonGames.get(i).getNumPlayerGoals() - rangeLD - 1);
-                    //lostOrDrawnGamesWithReallocationCapacity.remove(lossOrDrew);
-                    i += 1;
-               }
+          if(excessGoals != 0) {
+            try{
+              if (wonGames.size() > 1){
+                Collections.sort(wonGames, rangeComparatorRank);
+              }  
+            }
+            catch(Exception e){
+              System.out.println(e);
+            }
+            for(Game win : wonGames){
+              int goalsToWin = goalsTaken.get(win.getID());
+              if(excessGoals > goalsToWin){
+                win.setNumPlayerGoals(win.getNumPlayerGoals() + goalsToWin);
+                excessGoals -= goalsToWin;
+              }
+              else {
+                win.setNumPlayerGoals(win.getNumPlayerGoals() + excessGoals);
+                excessGoals = 0;
+              }
+            }
+
           }
 
+          if(excessGoals != 0) {
+            try{
+              if (lostOrDrawnGames.size() > 1){
+                Collections.sort(lostOrDrawnGames, rangeComparatorRank);
+              }  
+            }
+            catch(Exception e){
+              System.out.println(e);
+            }
+            for(Game loss : lostOrDrawnGames){
+              int goalsToWin =loss.getNumOpponentGoals() - loss.getNumPlayerGoals();
+              if(goalsToWin > 0){
+                if(excessGoals > goalsToWin){
+                  loss.setNumPlayerGoals(loss.getNumPlayerGoals() + goalsToWin);
+                  excessGoals -= goalsToWin;
+                }
+                else {
+                  loss.setNumPlayerGoals(loss.getNumPlayerGoals() + excessGoals);
+                  excessGoals = 0;
+                }
+              }
+            }
+          }
+
+
+          reallocatedPlayerGames.addAll(lostGamesWithReallocationCapacity);
+          reallocatedPlayerGames.addAll(drawnGamesWithReallocationCapacity);
           reallocatedPlayerGames.addAll(wonGames);
           reallocatedPlayerGames.addAll(drawnGames);
           reallocatedPlayerGames.addAll(lostGames);
 
+          //System.out.println("Lol " + round + " " + goalsToReallocate + " " + excessGoals);    
+
           if(checkConstraintsSatisfied(playerGames, reallocatedPlayerGames)) {
                return reallocatedPlayerGames;
           }
+
           return playerGames;
      }
 
@@ -165,65 +295,4 @@ public class Player extends sim.Player {
           }
           return losingGames;
      }
-
-     public int checkConstraintsSatisfiedTest(List<Game> originalPlayerGames, List<Game> reallocatedPlayerGames) {
-
-          Map<Integer, Game> originalPlayerGamesMap = new HashMap<>();
-          for(Game originalPlayerGame : originalPlayerGames)
-               originalPlayerGamesMap.put(originalPlayerGame.getID(), originalPlayerGame);
-          Map<Integer, Game> reallocatedPlayerGamesMap = new HashMap<>();
-          for(Game reallocatedPlayerGame : reallocatedPlayerGames)
-               reallocatedPlayerGamesMap.put(reallocatedPlayerGame.getID(), reallocatedPlayerGame);
-
-          int totalNumOriginalPlayerGoals = 0, totalNumReallocatedPlayerGoals = 0;
-          for(Game originalPlayerGame : originalPlayerGames) {
-               if(!reallocatedPlayerGamesMap.containsKey(originalPlayerGame.getID()))
-                    continue;
-               Game reallocatedPlayerGame = reallocatedPlayerGamesMap.get(originalPlayerGame.getID());
-               boolean isOriginalWinningGame = hasWonGame(originalPlayerGame);
-               boolean isOriginalLosingGame = hasLostGame(originalPlayerGame);
-               boolean isOriginalDrawnGame = hasDrawnGame(originalPlayerGame);
-
-               // Constraint 1
-               if(reallocatedPlayerGame.getNumPlayerGoals() < 0 || reallocatedPlayerGame.getNumPlayerGoals() > Game.getMaxGoalThreshold()) {
-                    return 1;
-               }
-
-               // Constraint 2
-               if(!originalPlayerGame.getNumOpponentGoals().equals(reallocatedPlayerGame.getNumOpponentGoals())) {
-                    return 2;
-               }
-
-               // Constraint 3
-               boolean numPlayerGoalsIncreased = reallocatedPlayerGame.getNumPlayerGoals() > originalPlayerGame.getNumPlayerGoals();
-               if(isOriginalWinningGame && numPlayerGoalsIncreased) {
-                    return 3;
-               }
-
-               // Constraint 4
-               int halfNumPlayerGoals = originalPlayerGame.getHalfNumPlayerGoals();
-               boolean numReallocatedPlayerGoalsLessThanHalf =
-                       reallocatedPlayerGame.getNumPlayerGoals() < (originalPlayerGame.getNumPlayerGoals() - halfNumPlayerGoals);
-               if((isOriginalWinningGame || isOriginalDrawnGame) && numReallocatedPlayerGoalsLessThanHalf) {
-                    return 4;
-               }
-
-               totalNumOriginalPlayerGoals += originalPlayerGame.getNumPlayerGoals();
-               totalNumReallocatedPlayerGoals += reallocatedPlayerGame.getNumPlayerGoals();
-
-               // Constraint 5
-               boolean numPlayerGoalsDecreased = reallocatedPlayerGame.getNumPlayerGoals() < originalPlayerGame.getNumPlayerGoals();
-               if(isOriginalLosingGame && numPlayerGoalsDecreased) {
-                    return 5;
-               }
-
-          }
-
-          // Constraint 6
-          if(totalNumOriginalPlayerGoals != totalNumReallocatedPlayerGoals) {
-               return 6;
-          }
-
-          return 7;
-     }
-}
+} 

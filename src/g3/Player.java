@@ -1,10 +1,19 @@
 <<<<<<< HEAD
 package g3;
 
+<<<<<<< Updated upstream
 import java.util.*;
+=======
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import sim.Game;
 import sim.GameHistory;
+import sim.PlayerPoints;
 import sim.SimPrinter;
 
 public class Player extends sim.Player {
@@ -32,8 +41,91 @@ public class Player extends sim.Player {
       * @return                  state of player games after reallocation
       *
       */
+     
+     public List<Integer> getHighestRatedPlayers(GameHistory gameHistory, Integer round, Integer k) {
+    	Map<Integer, Map<Integer, PlayerPoints>> cumulativePointsMap = gameHistory.getAllCumulativePointsMap();
+    	Map<Integer, PlayerPoints> roundMap = cumulativePointsMap.get(round-1);
+    	Set<Integer> set = roundMap.keySet();
+        List<Integer> keys = new ArrayList<Integer>(set);
+    	Collections.sort(keys, new Comparator<Integer>() {
+    		@Override
+    		public int compare(Integer s1, Integer s2) { 
+    			if (roundMap.get(s1).getTotalPoints()  < roundMap.get(s2).getTotalPoints() ) {
+                    return 1;
+                }
+    			else if (roundMap.get(s1).getTotalPoints()  > roundMap.get(s2).getTotalPoints()) {
+    				return -1; 
+    			}
+                return 0;
+    		}
+    	});
+    	return keys.subList(0,k);
+     }
+     
+     public List<List<Integer>> partitionGames(List<Game> playerGames) {
+    	 List<Integer> winningGames = new ArrayList<Integer>();
+    	 List<Integer> losingGames = new ArrayList<Integer>(); 
+    	 List<Integer> tiedGames = new ArrayList<Integer>();
+    	 for (int i=0; i<playerGames.size(); i++) {
+    		 Game game = playerGames.get(i);
+    		 if (game.getNumPlayerGoals() < game.getNumOpponentGoals()) {
+    			 winningGames.add(i);
+    		 }
+    		 else if (game.getNumPlayerGoals() > game.getNumOpponentGoals()) {
+    			 losingGames.add(i);
+    		 }
+    		 else {
+    			 tiedGames.add(i);
+    		 }
+    	 }
+    	 List<List<Integer>> solution = new ArrayList<List<Integer>>();
+    	 solution.add(winningGames);
+    	 solution.add(losingGames);
+    	 solution.add(tiedGames);
+    	 return solution;
+     }
+     
+          
+     public List<Game> HistoricReallocation(Integer round, GameHistory gameHistory, List<Game> playerGames, Map<Integer, List<Game>> opponentGamesMap, Integer k) {
+    	 List<Integer> players = this.getHighestRatedPlayers(gameHistory, round, k);
+    	 for (Game game: playerGames) {
+    		 simPrinter.print(game.getScore());
+    	 }
+    	 List<List<Integer>> partitionedGames = this.partitionGames(playerGames);
+    	 List<Integer> winningGames = partitionedGames.get(0);
+    	 List<Integer> losingGames = partitionedGames.get(1);
+    	 Collections.sort(winningGames, new Comparator<Integer>() {
+    		@Override
+     		public int compare(Integer i1, Integer i2) {
+    			Game g1 = playerGames.get(i1);
+    			Game g2 = playerGames.get(i2);
+     			return g1.getNumPlayerGoals() - g2.getNumPlayerGoals();     		
+     		}
+    	 });
+    	 for (Integer index: losingGames) {
+    		 if (players.contains(index+1)) {
+    			 Game game = playerGames.get(index);
+    	    	 int current_index = 0;
+    	    	 while (current_index < winningGames.size() && game.getNumOpponentGoals() > game.getNumPlayerGoals() ) {
+    	    		 int goal_difference = playerGames.get(winningGames.get(current_index)).getNumPlayerGoals() -  playerGames.get(winningGames.get(current_index)).getNumPlayerGoals();
+    	    		 if (goal_difference > 1) {
+    	    			game.setNumPlayerGoals(game.getNumPlayerGoals() + 1);
+    	    			Game currentGame = playerGames.get(winningGames.get(current_index));
+    	    			currentGame.setNumPlayerGoals(currentGame.getNumPlayerGoals() - 1);
+    	    		 }
+    	    		 else {
+    	    			 current_index += 1;
+    	    		 }
+    	    	 }
+    		 }
+    	 }
+    	 for (Game game: playerGames) {
+    		 simPrinter.print(game.getScore());
+    	 }
+    	 return playerGames;
+     }
+     
      public List<Game> reallocate(Integer round, GameHistory gameHistory, List<Game> playerGames, Map<Integer, List<Game>> opponentGamesMap) {
-
           List<Game> reallocatedPlayerGames = new ArrayList<>();
 
           List<Game> wonGames = getWinningGames(playerGames);
@@ -102,14 +194,13 @@ public class Player extends sim.Player {
                     }
 
                }
+	          reallocatedPlayerGames.addAll(wonGames);
+	          reallocatedPlayerGames.addAll(drawnGames);
+	          reallocatedPlayerGames.addAll(lostGames);
+	
+	          if(checkConstraintsSatisfied(playerGames, reallocatedPlayerGames))
+	               return reallocatedPlayerGames;
           }
-
-          reallocatedPlayerGames.addAll(wonGames);
-          reallocatedPlayerGames.addAll(drawnGames);
-          reallocatedPlayerGames.addAll(lostGames);
-
-          if(checkConstraintsSatisfied(playerGames, reallocatedPlayerGames))
-               return reallocatedPlayerGames;
           return playerGames;
      }
 
