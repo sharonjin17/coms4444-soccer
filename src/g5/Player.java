@@ -86,43 +86,50 @@ public class Player extends sim.Player {
 
         //System.out.println("ExcessGoals: "+excessGoals);
         int savedGoals1 = excessGoals;
-        List<Game> losingAndDraw = new ArrayList<Game>();
 
         for (Game g : clonePlayerGames) {
             int gm = g.getNumPlayerGoals()-g.getNumOpponentGoals();
             Game origin = findSameGameID(playerGames, g.getID()).cloneGame();
+            int checkwin = origin.getNumPlayerGoals()-origin.getNumOpponentGoals();
+            
             if (gm > 0) {
                 origin.setNumPlayerGoals(g.getNumPlayerGoals());
                 reallocatedGames.add(origin);
             }
             else if (excessGoals >= -gm+1) {
                 int goals = g.getNumPlayerGoals()-gm+1;
-                if (goals > g.getMaxGoalThreshold()) {
-                    origin.setNumPlayerGoals(origin.getMaxGoalThreshold());
-                    excessGoals -= origin.getMaxGoalThreshold() - origin.getNumPlayerGoals();
+                if (origin.getNumPlayerGoals() - goals < 0) {
+                    excessGoals -= origin.getNumPlayerGoals() - g.getNumPlayerGoals();
+                    reallocatedGames.add(origin);
                 }
                 else {
-                    origin.setNumPlayerGoals(goals);
-                    excessGoals -= -gm+1;
+                	if (goals > g.getMaxGoalThreshold()) {
+                        origin.setNumPlayerGoals(origin.getMaxGoalThreshold());
+                        excessGoals -= origin.getMaxGoalThreshold() - origin.getNumPlayerGoals();
+                    }
+                    else {
+                        origin.setNumPlayerGoals(goals);
+                        excessGoals -= -gm+1;
+                    }
+                    reallocatedGames.add(origin);
                 }
-                reallocatedGames.add(origin);
-                losingAndDraw.add(origin);
             }
             else {
                 origin.setNumPlayerGoals(g.getNumPlayerGoals());
                 reallocatedGames.add(origin);
-                losingAndDraw.add(origin);
             }
         }
         int savedGoals2 = excessGoals;
         //printGameList(reallocatedGames);
         //System.out.println("ExcessGoals after: "+excessGoals);
         while (excessGoals > 0) {
-            for (Game g: losingAndDraw) {
+            for (Game g: reallocatedGames) {
                 if (excessGoals <= 0) {
                     break;
                 }
-                if (g.getNumPlayerGoals() < g.getMaxGoalThreshold()) {
+                Game origin = findSameGameID(playerGames, g.getID()).cloneGame();
+                int freespace = origin.getNumPlayerGoals() - g.getNumPlayerGoals();
+                if (g.getNumPlayerGoals() < g.getMaxGoalThreshold() && freespace > 0) {
                     g.setNumPlayerGoals(g.getNumPlayerGoals()+1);
                     excessGoals -= 1;
                 }
@@ -143,9 +150,11 @@ public class Player extends sim.Player {
         if(checkConstraintsSatisfied(playerGames, reallocatedGames)) {
             return reallocatedGames;
         }
-        //System.out.println("Nothing changed");
+        System.out.println("Nothing changed");
         //System.out.println("PlayerGames: ");
         //printGameList(playerGames);
+        //System.out.println("losingAndDraw: ");
+        //printGameList(losingAndDraw);
         //System.out.println("ReallocatedGames: ");
         //printGameList(reallocatedGames);
         //System.out.println("ExcessGoals: "+savedGoals1+" "+savedGoals2);
