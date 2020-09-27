@@ -34,12 +34,15 @@ public class TeamTracker {
     public void trackRound(List<Game> games) {
         Set<Integer> updated = new HashSet<Integer>();
         for (Game game : games) {
-            collectGameData(game);
+            int pointDiff = collectGameData(game);
+            updated.add(pointDiff);
         }
         recalcPointChangeProbs(updated);
     }
 
-    private void collectGameData(Game game) {
+    // returns the game point difference
+    // Used to see what point difference probabilities should be updated
+    private int collectGameData(Game game) {
         Game pastGame = pastGames.get(game.getID());
         int numPointsChanged = game.getNumPlayerGoals() - pastGame.getNumPlayerGoals();
         Move move = Move.NO_CHANGE;
@@ -53,17 +56,19 @@ public class TeamTracker {
         int pointDiff = pastGame.getNumPlayerGoals() - pastGame.getNumOpponentGoals();
         if (!rawPointChangeData.containsKey(pointDiff)) {
             ArrayList<Move> changes = new ArrayList<Move>();
+            rawPointChangeData.put(pointDiff, changes);
         }
         rawPointChangeData.get(pointDiff).add(move);
+        return pointDiff;
     }
 
     private void recalcPointChangeProbs(Set<Integer> updated) {
         for (int pointDiff : updated) {
-            pointDiff -= 8;
+            pointDiff += 8;
             double probSum = 0;
             for (Move pc : Move.values()) {
                 double currentProb = pointChangeProbDist[pointDiff][pc.getValue()];
-                int pcCount = Collections.frequency(rawPointChangeData.get(pointDiff), pc);
+                int pcCount = Collections.frequency(rawPointChangeData.get(pointDiff - 8), pc);
                 double newProb = (double) pcCount / pointChangeProbDist[pointDiff].length;
                 pointChangeProbDist[pointDiff][pc.getValue()] = (currentProb + newProb)/2.0;
                 probSum += pointChangeProbDist[pointDiff][pc.getValue()];

@@ -20,7 +20,6 @@ public class MovePredictor {
     }
 
     public void trackData(Map<Integer, List<Game>> opponentGamesMap) {
-        simPrinter.println("### MovePredictor TRACKING DATA ###");
         if (teamTrackers.size() == 0) {
             for (Map.Entry<Integer,List<Game>> entry : opponentGamesMap.entrySet()) {
                 TeamTracker teamTracker = new TeamTracker(entry.getKey(), entry.getValue());
