@@ -1,7 +1,7 @@
 package g4;
 
 import java.util.*;
-
+import java.math.*;
 import sim.Game;
 import sim.GameHistory;
 import sim.SimPrinter;
@@ -67,9 +67,6 @@ public class Player extends sim.Player {
 			List<Double> rankList = new ArrayList<Double>(sortedRanks.values());
 			
 			// pointPredictor.trackData(opponentGamesMap);
-
-			// List<Game> reallocatedPlayerGames = new ArrayList<>();
-
 			// List<Game> wonGames = getWinningGames(playerGames);
 			// List<Game> drawnGames = getDrawnGames(playerGames);
 			// List<Game> lostGames = getLosingGames(playerGames);
@@ -118,24 +115,24 @@ public class Player extends sim.Player {
 
 		Map<Integer, Double> currentAverages = gameHistory.getAllAverageRankingsMap().get(round - 1);
 		List<Integer> nearestTeams = sortGamesByAverageRanking(currentAverages);
+		nearestTeams.remove(0);
+		System.out.println(nearestTeams.toString());
 		double g4MeanRanking = currentAverages.get(teamId);
-
-		int reallocateRadius = 3;
+		List<Game> playerGamesClone = new ArrayList<>();
+		playerGamesClone.addAll(playerGames);
 
 		List<Game> wonGames = getWinningGames(playerGames);
-		List<Game> drawnGames = getDrawnGames(playerGames);
-		List<Game> lostGames = getLosingGames(playerGames);
-		List<Integer> gameIDGoalReserviorException = new ArrayList<>();
-		for (Integer team : nearestTeams) {
-			List<Game> targetGame = opponentGamesMap.get(round-1);
-			for(Game game: targetGame){
-				if(wonGames.contains(game)){
-					gameIDGoalReserviorException.add(game.getID());
-				} 
-			}
-		}
+		// List<Integer> gameIDGoalReserviorException = new ArrayList<>();
+		// for (Integer team : nearestTeams) {
+		// 	List<Game> targetGame = opponentGamesMap.get(round-1);
+		// 	for(Game game: targetGame){
+		// 		if(wonGames.contains(game)){
+		// 			gameIDGoalReserviorException.add(game.getID());
+		// 		} 
+		// 	}
+		// }
 		for (Game wonGame : wonGames){
-			if(!gameIDGoalReserviorException.contains(wonGame.getID())){
+			if(!nearestTeams.contains(wonGame.getID())){
 				int numPlayerGoals = wonGame.getNumPlayerGoals();
 				int numOpponentGoals = wonGame.getNumOpponentGoals();
 				this.goalBank += numPlayerGoals - numOpponentGoals - 1;
@@ -145,8 +142,8 @@ public class Player extends sim.Player {
 			Game currentGame = getGameFromOpponentID(targetTeam, opponentGamesMap, playerGames, round);
 			
 			int lostBy = currentGame.getNumOpponentGoals() - currentGame.getNumPlayerGoals();
-			int goalsToAdd = lostBy + 1;
-			if (goalBank >= goalsToAdd) {
+			int goalsToAdd = lostBy + (int) (Math.random() * 2 + 1);
+			if (this.goalBank >= goalsToAdd) {
 				currentGame = transferFromBank(currentGame, goalsToAdd);
 				this.goalBank -= goalsToAdd;
 			} else {
@@ -155,16 +152,19 @@ public class Player extends sim.Player {
 			}
 			for(Game played: playerGames){
 				if(played.getID().equals(currentGame.getID())){
-					playerGames.set(playerGames.indexOf(played), currentGame);
+					playerGamesClone.set(playerGames.indexOf(played), currentGame);
 				}
 			}
+			System.out.println("ROUND: " + round + " goalBank " + this.goalBank);;
 		}
-		return playerGames;
+		return playerGamesClone;
 	}
 
 	public Game getGameFromOpponentID(int targetTeam, Map<Integer, List<Game>> opponentGamesMap, List<Game> playerGames, Integer round){
-		for(Game opponentGame: opponentGamesMap.get(round - 1)){
-			if(targetTeam == (opponentGame.getID())){
+		for(Game opponentGame: playerGames){
+			System.out.println(opponentGame.getID() + "MINE " + this.teamId);
+			if(opponentGame.getID().equals(targetTeam)){
+				System.out.println(playerGames.size());
 				return opponentGame;
 			}
 		}
