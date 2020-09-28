@@ -664,5 +664,4 @@ private List<Game> getLosingGames(List<Game> playerGames) {
 			losingGames.add(game.cloneGame());
 	}
 	return losingGames;
-}
 } 
