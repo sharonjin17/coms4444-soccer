@@ -120,7 +120,8 @@ public class Player extends sim.Player {
 		Map<Integer, Double> currentAverages = gameHistory.getAllAverageRankingsMap().get(round - 1);
 		List<Integer> nearestTeams = sortGamesByAverageRanking(currentAverages);
 		double g4MeanRanking = currentAverages.get(teamId);
-
+		nearestTeams.remove(0);
+		System.out.println(nearestTeams.toString());
 		int reallocateRadius = 3;
 
 		List<Game> wonGames = getWinningGames(playerGames);
