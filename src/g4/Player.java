@@ -78,7 +78,7 @@ public class Player extends sim.Player {
 			}
 			else {
 				reallocatedPlayerGames = reallocateLeapFrog(round, gameHistory, playerGames, opponentGamesMap);
-				System.out.println("HERE2");
+//				System.out.println("HERE2");
 			}
 		}
 		//List<Game> leapfrogGames = reallocateLeapFrog(round, gameHistory, playerGames, opponentGamesMap);
