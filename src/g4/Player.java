@@ -127,7 +127,7 @@ public class Player extends sim.Player {
 		List<Game> lostGames = getLosingGames(playerGames);
 		List<Integer> gameIDGoalReserviorException = new ArrayList<>();
 		for (Integer team : nearestTeams) {
-			List<Game> targetGame = opponentGamesMap.get(team);
+			List<Game> targetGame = opponentGamesMap.get(round-1);
 			for(Game game: targetGame){
 				if(wonGames.contains(game)){
 					gameIDGoalReserviorException.add(game.getID());
@@ -142,7 +142,8 @@ public class Player extends sim.Player {
 			}
 		}
 		for(Integer targetTeam: nearestTeams){
-			Game currentGame = getGameFromOpponentID(targetTeam, opponentGamesMap, playerGames);
+			Game currentGame = getGameFromOpponentID(targetTeam, opponentGamesMap, playerGames, round);
+			
 			int lostBy = currentGame.getNumOpponentGoals() - currentGame.getNumPlayerGoals();
 			int goalsToAdd = lostBy + 1;
 			if (goalBank >= goalsToAdd) {
@@ -161,9 +162,9 @@ public class Player extends sim.Player {
 		return playerGames;
 	}
 
-	public Game getGameFromOpponentID(Integer targetTeam, Map<Integer, List<Game>> opponentGamesMap, List<Game> playerGames){
-		for(Game opponentGame: opponentGamesMap.get(targetTeam)){
-			if(playerGames.contains(opponentGame)){
+	public Game getGameFromOpponentID(int targetTeam, Map<Integer, List<Game>> opponentGamesMap, List<Game> playerGames, Integer round){
+		for(Game opponentGame: opponentGamesMap.get(round - 1)){
+			if(targetTeam == (opponentGame.getID())){
 				return opponentGame;
 			}
 		}
@@ -231,8 +232,8 @@ public class Player extends sim.Player {
 			}
 		}
 
-		Game lowestRankGame = getGameFromOpponentID(lowestRankTeam, opponentGamesMap, playerGames);
-		Game highestRankGame = getGameFromOpponentID(highestRankTeam, opponentGamesMap, playerGames);
+		Game lowestRankGame = getGameFromOpponentID(lowestRankTeam, opponentGamesMap, playerGames, round);
+		Game highestRankGame = getGameFromOpponentID(highestRankTeam, opponentGamesMap, playerGames, round);
 
 		for (Game winningGame : wonGames) {
 			if (lowestRankGame.getID() == winningGame.getID()) {
