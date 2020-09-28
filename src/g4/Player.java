@@ -283,24 +283,35 @@ public class Player extends sim.Player {
 
 	public List<Game> roundOneReallocate(Integer round, GameHistory gameHistory, List<Game> playerGames, Map<Integer, List<Game>> opponentGamesMap) {
 		List<Game> reallocatedPlayerGames = new ArrayList<>();
-		
+    	 
 		List<Game> wonGames = getWinningGames(playerGames);
 		List<Game> drawnGames = getDrawnGames(playerGames);
 		List<Game> lostGames = getLosingGames(playerGames);
-	   
-		int goalsTakenFromWins = 0;
-		for (Game winningGame : wonGames) {
-			goalsTakenFromWins += 1;
-			winningGame.setNumPlayerGoals(winningGame.getNumPlayerGoals() - 1);
-		}
-
-		for (Game drawingGame : drawnGames) {
-			if (goalsTakenFromWins == 1) {
+		
+		List<Game> lostOrDrawnGamesWithReallocationCapacity = new ArrayList<>(lostGames);
+		lostOrDrawnGamesWithReallocationCapacity.addAll(drawnGames);
+		for(Game lostGame : lostGames)
+			if(lostGame.maxPlayerGoalsReached())
+				lostOrDrawnGamesWithReallocationCapacity.remove(lostGame);
+		for(Game drawnGame : drawnGames)
+			if(drawnGame.maxPlayerGoalsReached())
+				lostOrDrawnGamesWithReallocationCapacity.remove(drawnGame);
+	
+		for(Game winningGame : wonGames) {    		 
+			
+			if(lostOrDrawnGamesWithReallocationCapacity.size() == 0)
 				break;
-			}
-			else {
-				drawingGame.setNumPlayerGoals(drawingGame.getNumPlayerGoals() + 1);
-			}
+
+			Game randomLostOrDrawnGame = lostOrDrawnGamesWithReallocationCapacity.get(this.random.nextInt(lostOrDrawnGamesWithReallocationCapacity.size()));
+
+			int halfNumPlayerGoals = winningGame.getHalfNumPlayerGoals();
+			int numRandomGoals = (int) Math.min(this.random.nextInt(halfNumPlayerGoals) + 1, Game.getMaxGoalThreshold() - randomLostOrDrawnGame.getNumPlayerGoals());
+
+			winningGame.setNumPlayerGoals(winningGame.getNumPlayerGoals() - numRandomGoals);
+			randomLostOrDrawnGame.setNumPlayerGoals(randomLostOrDrawnGame.getNumPlayerGoals() + numRandomGoals);
+			
+			if(randomLostOrDrawnGame.maxPlayerGoalsReached())
+				lostOrDrawnGamesWithReallocationCapacity.remove(randomLostOrDrawnGame);
 		}
 		
 		reallocatedPlayerGames.addAll(wonGames);
