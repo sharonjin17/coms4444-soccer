@@ -1,12 +1,6 @@
 package g3;
 
 import java.util.*;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import sim.Game;
 import sim.GameHistory;
@@ -26,8 +20,13 @@ public class Player extends sim.Player {
       *
       */
 	
+	 private int HIGH_MARGIN_LOSS = 0;
+	 private int LOW_MARGIN_WIN = 1; 
+	 private PlayerPredictor predictor; 
+	
      public Player(Integer teamID, Integer rounds, Integer seed, SimPrinter simPrinter) {
           super(teamID, rounds, seed, simPrinter);
+          this.predictor = new PlayerPredictor(2, 2); 
      }
 
      /**
@@ -42,8 +41,7 @@ public class Player extends sim.Player {
       *
       */
      
-	 private int HIGH_MARGIN_LOSS = 0;
-	 private int LOW_MARGIN_WIN = 1; 
+
      /*
       * 1. Expectation Maximization 
       * 2. Historic Weighting of outcomes with alpha and beta search 
@@ -56,6 +54,138 @@ public class Player extends sim.Player {
       * 
       * 
       */
+     
+    private double getAdjustment(int gameID, int scenario, Map<Integer, Map<Integer, Double>> predictions) { 
+    	if (predictions != null) {
+    		Map<Integer, Double> opponentMap = predictions.get(gameID); 
+    		if (opponentMap.containsKey(scenario)) {
+        		return opponentMap.get(scenario);
+    		}
+    	}
+    	return 0; 
+    }
+    
+	 
+	 
+	private List<Game> simpleReallocation(Integer round, GameHistory gameHistory, List<Game> playerGames, Map<Integer, List<Game>> opponentGamesMap) {
+		try {
+		this.predictor.updateHistory(opponentGamesMap, round);
+		Map<Integer, Map<Integer, Double>> predictions = null;
+		if (round != 1) { 
+    		predictions = this.predictor.getPredictions(); 	
+    	}
+    	
+		List<Game> wins = getWinningGames(playerGames);
+		List<Game> draws = getDrawnGames(playerGames);
+		List<Game> losses = getLosingGames(playerGames);
+		List<Game> reallocatedPlayerGames = new ArrayList<>();
+		Map<Integer, Set<Integer>> playerSet = PerformanceBasedReallocation.getPlayersInWindow(teamID, gameHistory, losses, draws, wins, 1, round);
+		Set<Integer> worseRatedTeams = playerSet.get(PerformanceBasedReallocation.WORSE_RATED_TEAMS);
+		Set<Integer> betterRatedTeams = playerSet.get(PerformanceBasedReallocation.BETTER_RATED_TEAMS);
+		
+		int extraGoals = 0;
+		for (Game game: wins) {
+			int goalsDifference = game.getNumPlayerGoals() - game.getNumOpponentGoals();
+			if (goalsDifference > 2) {
+				int adjustment = (int) getAdjustment(game.getID(), PlayerPredictor.HIGH_MARGIN_WINS, predictions);
+				if (goalsDifference - 2 > game.getHalfNumPlayerGoals()) {
+					if (game.getHalfNumPlayerGoals() < adjustment) {
+		                extraGoals += game.getHalfNumPlayerGoals();
+		                game.setNumPlayerGoals(game.getNumPlayerGoals() - game.getHalfNumPlayerGoals());
+					}
+					else {
+						extraGoals += adjustment;
+		                game.setNumPlayerGoals(game.getNumPlayerGoals() - adjustment);
+					}
+	           }
+	           else {
+	                extraGoals += goalsDifference - Math.max(2, adjustment);
+	                game.setNumPlayerGoals(game.getNumOpponentGoals() + Math.max(2, adjustment));
+	           }
+			}
+		}
+		
+		for (Game game : wins) {
+		 	 if (!betterRatedTeams.contains(game.getID())) {
+		          int goalsDifference = game.getNumPlayerGoals() - game.getNumOpponentGoals();
+		
+		          if (goalsDifference == 1) {
+		               extraGoals += game.getHalfNumPlayerGoals();
+		               game.setNumPlayerGoals(game.getNumPlayerGoals() - game.getHalfNumPlayerGoals());
+		          }
+		 	 }
+		 }
+		
+		Set<Integer> visited = new HashSet<Integer>(); 
+		int acceptableLossMargin = 2;
+		for (Game game: losses) { 
+	     	if (extraGoals > 0 && betterRatedTeams.contains(game.getID())) {
+	     		int margin = game.getNumOpponentGoals() - game.getNumPlayerGoals() + 1;
+	     		if (margin <= acceptableLossMargin && extraGoals > margin) { 
+	     			visited.add(game.getID());
+	     			extraGoals -= margin;
+	     			game.setNumPlayerGoals(game.getNumPlayerGoals() + margin);
+	     		}
+	     	}
+	     }
+		
+		// Allocate all points to lost games
+		 // First, sort lost games by the margin needed to win
+	     Collections.sort(losses, new Comparator<Game>() {
+	          @Override
+	          public int compare(Game g1, Game g2) {
+	               int g1Margin = g1.getNumOpponentGoals() - g1.getNumPlayerGoals();
+	               int g2Margin = g2.getNumOpponentGoals() - g2.getNumPlayerGoals();
+	               return g1Margin - g2Margin;
+	          }
+	     });
+	     
+	     for (Game game : losses) {
+		     simPrinter.println("loss");
+	         if (game.getNumPlayerGoals() < game.getMaxGoalThreshold() && extraGoals > 0 && !visited.contains(game.getID())) {
+	              int margin = game.getNumOpponentGoals() - game.getNumPlayerGoals() + 1;
+	
+	              if (extraGoals >= margin && game.getNumPlayerGoals() + margin < game.getMaxGoalThreshold()) {
+	                   extraGoals -= margin;
+	                   game.setNumPlayerGoals(game.getNumPlayerGoals() + margin);
+	              }
+	              else if (game.getNumPlayerGoals() + extraGoals < game.getMaxGoalThreshold()) {
+	                   game.setNumPlayerGoals(game.getNumPlayerGoals() + extraGoals);
+	                   extraGoals = 0;
+	              }
+	         }
+	    }
+	     
+	     for (Game game : draws) {
+		     simPrinter.println("loss");
+	         if (game.getNumPlayerGoals() + extraGoals < game.getMaxGoalThreshold()) {
+                 game.setNumPlayerGoals(game.getNumPlayerGoals() + extraGoals);
+	             extraGoals = 0;
+	         }
+	         else { 
+	        	 int diff = game.getMaxGoalThreshold() - game.getNumPlayerGoals(); 
+	        	 game.setNumPlayerGoals(game.getNumPlayerGoals() + diff);
+	             extraGoals -= diff;
+	         }
+	    } 
+	     
+	     reallocatedPlayerGames.addAll(wins);
+	     reallocatedPlayerGames.addAll(draws);
+	     reallocatedPlayerGames.addAll(losses);
+	
+	     if(ourcheckConstraintsSatisfied(playerGames, reallocatedPlayerGames)) {
+	         return reallocatedPlayerGames;
+	     }
+	     simPrinter.println("mess up");
+	     simPrinter.println(extraGoals);
+		}
+		catch (Exception e) {
+			simPrinter.println(e.getMessage());
+		}
+	    return playerGames;
+		
+		
+	}
 	 
 	private List<Game> performanceBasedReallocation(Integer round, int acceptableLossMargin,  GameHistory gameHistory, List<Game> playerGames, Map<Integer, List<Game>> opponentGamesMap, int window) { 
 		List<Game> wins = getWinningGames(playerGames);
@@ -114,6 +244,7 @@ public class Player extends sim.Player {
 	          }
 	     });
 	     
+	     /*
 	     for (Game game: losses) { 
 	     	if (extraGoals > 0 && betterRatedTeams.contains(game.getID())) {
 	     		int margin = game.getNumOpponentGoals() - game.getNumPlayerGoals() + 1;
@@ -123,8 +254,10 @@ public class Player extends sim.Player {
 	     		}
 	     	}
 	     }
-	     
+	     */
+	     	     
 	     for (Game game : losses) {
+		     simPrinter.println("loss");
 	         if (extraGoals > 0) {
 	              int margin = game.getNumOpponentGoals() - game.getNumPlayerGoals() + 1;
 	
@@ -136,17 +269,44 @@ public class Player extends sim.Player {
 	                   game.setNumPlayerGoals(game.getNumPlayerGoals() + extraGoals);
 	                   extraGoals = 0;
 	              }
-	
 	         }
-		          reallocatedPlayerGames.addAll(wins);
-		          reallocatedPlayerGames.addAll(draws);
-		          reallocatedPlayerGames.addAll(losses);
-		
-		          if(checkConstraintsSatisfied(playerGames, reallocatedPlayerGames))
-		               return reallocatedPlayerGames;
+	    }
+	     
+	    while (extraGoals > 0) { 
+	    	for (Game game: losses) { 
+	    		if (extraGoals > 0 && game.getNumPlayerGoals() < game.getMaxGoalThreshold()) {
+	    			extraGoals -= 1;
+	    			game.setNumPlayerGoals(game.getHalfNumPlayerGoals() + 1);
+	    		}
+	    	}
+	    	
+	    	for (Game game: wins) { 
+	    		if (extraGoals > 0 && game.getNumPlayerGoals() < game.getMaxGoalThreshold()) {
+	    			extraGoals -= 1;
+	    			game.setNumPlayerGoals(game.getHalfNumPlayerGoals() + 1);
+	    		}
+	    	}
+	    	
+	    	for (Game game: draws) { 
+	    		if (extraGoals > 0 && game.getNumPlayerGoals() < game.getMaxGoalThreshold()) {
+	    			extraGoals -= 1;
+	    			game.setNumPlayerGoals(game.getHalfNumPlayerGoals() + 1);
+	    		}
+	    	}
 	    }
 	    
-	     return reallocatedPlayerGames;
+	        
+	     reallocatedPlayerGames.addAll(wins);
+	     reallocatedPlayerGames.addAll(draws);
+	     reallocatedPlayerGames.addAll(losses);
+	
+	     if(ourcheckConstraintsSatisfied(playerGames, reallocatedPlayerGames)) {
+	         return reallocatedPlayerGames;
+	     }
+	     simPrinter.println("mess up");
+	     simPrinter.println(extraGoals);
+
+	    return playerGames;
 	}
 		
 	 
@@ -304,28 +464,6 @@ public class Player extends sim.Player {
               }
          });
          
-         /*
-         int count = 2;
-         for (int i = lostGames.size() - 1; i >= lostGames.size() - 2; i--) { 
-       	  Game lostGame = lostGames.get(i); 
-       	  if (lostGame.getNumOpponentGoals() - lostGame.getNumPlayerGoals() > 2) {
-	        	  int opponentId = lostGame.getID(); 
-	        	  try {
-	        		  double allocation = predictedAllocation(opponentId, gameHistory, round, HIGH_MARGIN_LOSS);
-	        		  simPrinter.println("allocation");
-		        	  simPrinter.println(allocation);
-		        	  if (extraGoals > allocation) { 
-		        		  extraGoals -= (int) allocation;
-		        		  lostGame.setNumPlayerGoals(lostGame.getNumPlayerGoals() + (int) allocation);
-		        	  }
-	        	  }
-	        	  catch (Exception e) {
-	        		  e.printStackTrace();
-	        	  }
-       	  }
-         }
-         */
-         
          for (Game game : lostGames) {
              if (extraGoals > 0) {
                   int margin = game.getNumOpponentGoals() - game.getNumPlayerGoals() + 1;
@@ -340,134 +478,93 @@ public class Player extends sim.Player {
                   }
 
              }
-	          reallocatedPlayerGames.addAll(wonGames);
-	          reallocatedPlayerGames.addAll(drawnGames);
-	          reallocatedPlayerGames.addAll(lostGames);
-	
-	          if(checkConstraintsSatisfied(playerGames, reallocatedPlayerGames))
-	               return reallocatedPlayerGames;
         }
+         
+         reallocatedPlayerGames.addAll(wonGames);
+         reallocatedPlayerGames.addAll(drawnGames);
+         reallocatedPlayerGames.addAll(lostGames);
+
+         if(ourcheckConstraintsSatisfied(playerGames, reallocatedPlayerGames))
+              return reallocatedPlayerGames;
         
+         simPrinter.println("mess up");
          return playerGames;
     	 
      }
      
      
-     public List<Game> reallocate(Integer round, GameHistory gameHistory, List<Game> playerGames, Map<Integer, List<Game>> opponentGamesMap) {
-          
-    	 return performanceBasedReallocation(round, 1, gameHistory, playerGames, opponentGamesMap, 1);
-    	 // return this.expectedValueBasedAllocation(round, gameHistory, playerGames, opponentGamesMap);
-    	 /*
-	    	  List<Game> reallocatedPlayerGames = new ArrayList<>();
-	
-	          List<Game> wonGames = getWinningGames(playerGames);
-	          List<Game> drawnGames = getDrawnGames(playerGames);
-	          List<Game> lostGames = getLosingGames(playerGames);
-	
-	          int extraGoals = 0;
-	          
-	          simPrinter.println(gameHistory.getAllAverageRankingsMap());
-	
-	          // For won games, leave at least 2 buffer goals
-	          int bufferWinGoals = 2;
-	          for (Game game : wonGames) {
-	               int goalsDifference = game.getNumPlayerGoals() - game.getNumOpponentGoals();
-	               if (goalsDifference > bufferWinGoals) {
-	                    if (goalsDifference - bufferWinGoals > game.getHalfNumPlayerGoals()) {
-	                         extraGoals += game.getHalfNumPlayerGoals();
-	                         game.setNumPlayerGoals(game.getNumPlayerGoals() - game.getHalfNumPlayerGoals());
-	                    }
-	                    else {
-	                         extraGoals += goalsDifference - bufferWinGoals;
-	                         game.setNumPlayerGoals(game.getNumOpponentGoals() + bufferWinGoals);
-	                    }
-	               }
-	          }
-	
-	          // For games won with 1 goal difference, take away half the goals
-	          for (Game game : wonGames) {
-	               int goalsDifference = game.getNumPlayerGoals() - game.getNumOpponentGoals();
-	
-	               if (goalsDifference == 1) {
-	                    extraGoals += game.getHalfNumPlayerGoals();
-	                    game.setNumPlayerGoals(game.getNumPlayerGoals() - game.getHalfNumPlayerGoals());
-	               }
-	          }
-	
-	          // For drawn games, first allocate half of all goals to extraGoals
-	          for (Game game : drawnGames) {
-	               extraGoals += game.getHalfNumPlayerGoals();
-	               game.setNumPlayerGoals(game.getNumPlayerGoals() - game.getHalfNumPlayerGoals());
-	          }
-	
-	          // Allocate all points to lost games
-	          // First, sort lost games by the margin needed to win
-	          Collections.sort(lostGames, new Comparator<Game>() {
-	               @Override
-	               public int compare(Game g1, Game g2) {
-	                    int g1Margin = g1.getNumOpponentGoals() - g1.getNumPlayerGoals();
-	                    int g2Margin = g2.getNumOpponentGoals() - g2.getNumPlayerGoals();
-	
-	                    return g1Margin - g2Margin;
-	               }
-	          });
-	          
-	          int count = 2;
-	          for (int i = lostGames.size() - 1; i >= lostGames.size() - 2; i--) { 
-	        	  Game lostGame = lostGames.get(i); 
-	        	  if (lostGame.getNumOpponentGoals() - lostGame.getNumPlayerGoals() > 2) {
-	        		  simPrinter.println("What the fuck");
-	        		  simPrinter.println(round);
-	            	  simPrinter.println(lostGame.getNumOpponentGoals() - lostGame.getNumPlayerGoals());
-		        	  int opponentId = lostGame.getID(); 
-		        	  try {
-		        		  double allocation = predictedAllocation(opponentId, gameHistory, round, HIGH_MARGIN_LOSS);
-		        		  simPrinter.println("allocation");
-			        	  simPrinter.println(allocation);
-			        	  if (extraGoals > allocation) { 
-			        		  extraGoals -= (int) allocation;
-			        		  lostGame.setNumPlayerGoals(lostGame.getNumPlayerGoals() + (int) allocation);
-			        	  }
-		        	  }
-		        	  catch (Exception e) {
-		        		  e.printStackTrace();
-		        	  }
-	        	  }
-	          }
-	          
-	          for (Game game : lostGames) {
-	              if (extraGoals > 0) {
-	                   int margin = game.getNumOpponentGoals() - game.getNumPlayerGoals() + 1;
-	
-	                   if (extraGoals >= margin) {
-	                        extraGoals -= margin;
-	                        game.setNumPlayerGoals(game.getNumPlayerGoals() + margin);
-	                   }
-	                   else {
-	                        game.setNumPlayerGoals(game.getNumPlayerGoals() + extraGoals);
-	                        extraGoals = 0;
-	                   }
-	
-	              }
-		          reallocatedPlayerGames.addAll(wonGames);
-		          reallocatedPlayerGames.addAll(drawnGames);
-		          reallocatedPlayerGames.addAll(lostGames);
-		
-		          if(checkConstraintsSatisfied(playerGames, reallocatedPlayerGames))
-		               return reallocatedPlayerGames;
-	         }
-	         
-	          return playerGames;
-	     }
-		 */
-	     /* private List<Game> analyzeGamesLost(List<Game> lostGames, GameHistory gameHistory) { 
-	    	 for (Game game: lostGames) { 
-	    		 int teamID = game.getID(); 
-	    		 
-	    		 
-	    	 }
-	    	
-	     } */
+     private boolean ourcheckConstraintsSatisfied(List<Game> originalPlayerGames, List<Game> reallocatedPlayerGames) {
+ 		
+ 		Map<Integer, Game> originalPlayerGamesMap = new HashMap<>();
+ 		for(Game originalPlayerGame : originalPlayerGames)
+ 			originalPlayerGamesMap.put(originalPlayerGame.getID(), originalPlayerGame);
+ 		Map<Integer, Game> reallocatedPlayerGamesMap = new HashMap<>();
+ 		for(Game reallocatedPlayerGame : reallocatedPlayerGames)
+ 			reallocatedPlayerGamesMap.put(reallocatedPlayerGame.getID(), reallocatedPlayerGame);
+ 		
+ 		int totalNumOriginalPlayerGoals = 0, totalNumReallocatedPlayerGoals = 0;
+ 		for(Game originalPlayerGame : originalPlayerGames) {			
+ 			if(!reallocatedPlayerGamesMap.containsKey(originalPlayerGame.getID()))
+ 				continue;
+ 			Game reallocatedPlayerGame = reallocatedPlayerGamesMap.get(originalPlayerGame.getID());
+ 			boolean isOriginalWinningGame = hasWonGame(originalPlayerGame);
+ 			boolean isOriginalLosingGame = hasLostGame(originalPlayerGame);
+ 			boolean isOriginalDrawnGame = hasDrawnGame(originalPlayerGame);
+ 			
+ 			// Constraint 1
+ 			if(reallocatedPlayerGame.getNumPlayerGoals() < 0 || reallocatedPlayerGame.getNumPlayerGoals() > Game.getMaxGoalThreshold()) {
+ 				simPrinter.println("constraint 1");
+ 				return false;
+ 			}
+ 			
+ 			// Constraint 2
+ 			if(!originalPlayerGame.getNumOpponentGoals().equals(reallocatedPlayerGame.getNumOpponentGoals())) {
+ 				simPrinter.println("constraint 2");
+ 				return false;
+ 			}
+ 			
+ 			// Constraint 3
+ 			boolean numPlayerGoalsIncreased = reallocatedPlayerGame.getNumPlayerGoals() > originalPlayerGame.getNumPlayerGoals();
+ 			if(isOriginalWinningGame && numPlayerGoalsIncreased) {
+ 				simPrinter.println("constraint 3");
+ 				return false;
+ 			}
+
+ 			// Constraint 4
+ 			int halfNumPlayerGoals = originalPlayerGame.getHalfNumPlayerGoals();
+ 			boolean numReallocatedPlayerGoalsLessThanHalf = 
+ 					reallocatedPlayerGame.getNumPlayerGoals() < (originalPlayerGame.getNumPlayerGoals() - halfNumPlayerGoals);
+ 			if((isOriginalWinningGame || isOriginalDrawnGame) && numReallocatedPlayerGoalsLessThanHalf) {
+ 				simPrinter.println("constraint 4");
+ 				simPrinter.println(reallocatedPlayerGame.getNumPlayerGoals());
+ 				simPrinter.println(originalPlayerGame.getNumPlayerGoals() - halfNumPlayerGoals);
+
+ 				return false;
+ 			}
+ 			
+ 			totalNumOriginalPlayerGoals += originalPlayerGame.getNumPlayerGoals();
+ 			totalNumReallocatedPlayerGoals += reallocatedPlayerGame.getNumPlayerGoals();
+ 			
+ 			// Constraint 5
+ 			boolean numPlayerGoalsDecreased = reallocatedPlayerGame.getNumPlayerGoals() < originalPlayerGame.getNumPlayerGoals();
+ 			if(isOriginalLosingGame && numPlayerGoalsDecreased) {
+ 				simPrinter.println("constraint 5");
+ 				return false;
+ 			}
+ 		}
+ 		
+ 	// Constraint 6
+ 			if(totalNumOriginalPlayerGoals != totalNumReallocatedPlayerGoals) {
+ 				simPrinter.println("constraint 6");
+ 				return false;
+ 			}
+ 				
+ 			return true;
+	}
+     
+     
+    public List<Game> reallocate(Integer round, GameHistory gameHistory, List<Game> playerGames, Map<Integer, List<Game>> opponentGamesMap) {
+    	 return simpleReallocation(round, gameHistory, playerGames, opponentGamesMap);
     }
      
      private List<Game> getWinningGames(List<Game> playerGames) {
