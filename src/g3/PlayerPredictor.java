@@ -1,6 +1,8 @@
 package g3;
 import java.util.*;
 import sim.Game;
+import sim.SimPrinter;
+
 
 public class PlayerPredictor {
 	private Map<Integer, Map<Integer, Double>> userBehaviors; 
@@ -11,8 +13,9 @@ public class PlayerPredictor {
 	private int loss_margin_boundary; 
 	private int win_margin_boundary;
 	private Map<Integer,List<Game>> previousGamesMap; 
+	private SimPrinter simPrinter; 
 	
-	public PlayerPredictor(int loss_margin_boundary, int win_margin_boundary) { 
+	public PlayerPredictor(int loss_margin_boundary, int win_margin_boundary, SimPrinter simPrinter) { 
 		this.userBehaviors = new HashMap<Integer, Map<Integer, Double>>();
 		for (int i = 1; i<=10; i++) { 
 			HashMap<Integer, Double> teamHashMap = new HashMap<Integer, Double>(); 
@@ -20,6 +23,7 @@ public class PlayerPredictor {
 			this.loss_margin_boundary = loss_margin_boundary;
 			this.win_margin_boundary = win_margin_boundary; 
 		}
+		this.simPrinter = simPrinter;
 	}
 	
 	private double getAverage(List<Integer> numberList) {
@@ -48,14 +52,16 @@ public class PlayerPredictor {
 				List<Integer> HIGH_MARGIN_LOSS_ALLOCATIONS = new LinkedList<Integer>();
 				
 				for (Game game: winningGames) {
-					for (Game nextGame: gameList) {							
-						if (nextGame.getID() == game.getID()) {
-							int goals_removed = game.getNumPlayerGoals() - nextGame.getNumPlayerGoals();  
-							if (game.getNumPlayerGoals() - game.getNumOpponentGoals() > win_margin_boundary) {
-								HIGH_MARGIN_WIN_ALLOCATIONS.add(game.getNumPlayerGoals() - game.getNumOpponentGoals());
+					for (Game nextGame: gameList) {
+						if (nextGame.getID().equals(game.getID())) {
+							int goals_removed = game.getNumPlayerGoals() - nextGame.getNumPlayerGoals(); 
+							if (game.getNumPlayerGoals() - game.getNumOpponentGoals() >= win_margin_boundary) {
+								HIGH_MARGIN_WIN_ALLOCATIONS.add(goals_removed);
 							}
 							else {
-								LOW_MARGIN_WIN_ALLOCATIONS.add(game.getNumPlayerGoals() - game.getNumOpponentGoals());
+								if (goals_removed > 0) {
+									LOW_MARGIN_WIN_ALLOCATIONS.add(goals_removed);
+								}
 							}
 						}
 					}
@@ -63,12 +69,13 @@ public class PlayerPredictor {
 				
 				for (Game game: losingGames) {
 					for (Game nextGame: gameList) {
-						if (nextGame.getID() == game.getID()) {
-							if (game.getNumOpponentGoals() - game.getNumPlayerGoals() > win_margin_boundary) {
-								HIGH_MARGIN_LOSS_ALLOCATIONS.add(game.getNumOpponentGoals() - game.getNumPlayerGoals());
+						if (nextGame.getID().equals(game.getID())) {
+							int goals_added = nextGame.getNumPlayerGoals() - game.getNumPlayerGoals();
+							if (game.getNumOpponentGoals() - game.getNumPlayerGoals() > loss_margin_boundary) {
+								HIGH_MARGIN_LOSS_ALLOCATIONS.add(goals_added);
 							}
 							else {
-								LOW_MARGIN_LOSS_ALLOCATIONS.add(game.getNumOpponentGoals() - game.getNumPlayerGoals());
+								LOW_MARGIN_LOSS_ALLOCATIONS.add(goals_added);
 							}
 						}
 					}
