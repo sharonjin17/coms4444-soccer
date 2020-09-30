@@ -2,6 +2,7 @@
 .idea/
 .idea*
 *.im
+*.iml
 
 # Class files
 *.class
@@ -10,6 +11,9 @@ src/*/*.class
 
 # Bin folder
 bin/
+
+# Makefile
+src/Makefile
 
 # Log file
 *.log
