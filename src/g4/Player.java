@@ -54,7 +54,6 @@ public class Player extends sim.Player {
 		}
 		else
 		{
-			//System.out.println(gameHistory.getAllAverageRankingsMap().get(round - 1));
 			Map<Integer, Double> currentAverages = gameHistory.getAllAverageRankingsMap().get(round - 1);
 			double g4MeanRanking = currentAverages.get(teamId);
 
@@ -66,14 +65,6 @@ public class Player extends sim.Player {
 				.forEachOrdered(x -> sortedRanks.put(x.getKey(), x.getValue()));
 			
 			List<Double> rankList = new ArrayList<Double>(sortedRanks.values());
-//			System.out.println(rankList.toString());
-			// pointPredictor.trackData(opponentGamesMap);
-
-			// List<Game> reallocatedPlayerGames = new ArrayList<>();
-
-			// List<Game> wonGames = getWinningGames(playerGames);
-			// List<Game> drawnGames = getDrawnGames(playerGames);
-			// List<Game> lostGames = getLosingGames(playerGames);
 			
 			if (0 < rankList.indexOf(g4MeanRanking) && rankList.indexOf(g4MeanRanking) < 5 
 				&& rankList.get(0) != g4MeanRanking) {
@@ -83,36 +74,6 @@ public class Player extends sim.Player {
 				reallocatedPlayerGames = reallocateLeapFrog(round, gameHistory, playerGames, opponentGamesMap);
 			}
 		}
-		//List<Game> leapfrogGames = reallocateLeapFrog(round, gameHistory, playerGames, opponentGamesMap);
-		//List<Game> attackHigherRankGames = attackHigherRanks(round, gameHistory, playerGames, opponentGamesMap);
-
-		// System.out.println("Reallocating goals");
-		//calculateBank(wonGames, targetTeamID.get(0), targetTeamID.get(1));
-		//this.movePredictor.trackData(opponentGamesMap);
-		// System.out.println(this.goalBank);
-		// System.out.println("Bank:" + goalBank);
-		//transferGoalsToLostGames(lostGames);
-		//transferGoalsToDrawnGames(drawnGames);
-
-		// adjust winning games score
-		/*
-		int goalsTakenFromWins = 0;
-		for (Game winningGame : wonGames) {
-			goalsTakenFromWins += winningGame.getNumPlayerGoals() - winningGame.getNumOpponentGoals() - 1;
-			winningGame.setNumPlayerGoals(winningGame.getNumOpponentGoals() + 1);
-		}
-		// System.out.println("Goals taken:" + goalsTakenFromWins);
-
-		reallocatedPlayerGames.addAll(lostGames);
-		reallocatedPlayerGames.addAll(drawnGames);
-		reallocatedPlayerGames.addAll(wonGames);
-		this.goalBank = 0;
-		// check constraints and return
-		if (checkConstraintsSatisfied(playerGames, reallocatedPlayerGames))
-			return reallocatedPlayerGames;
-
-		return playerGames; */
-		//return leapfrogGames;
 		return reallocatedPlayerGames;
 	}
     // algorithm #1:
@@ -130,13 +91,7 @@ public class Player extends sim.Player {
 		double g4MeanRanking = currentAverages.get(teamId);
 		nearestTeams.remove(0);
 		List<Game> wonGames = getWinningGames(playerGames);
-		// for (Integer team : nearestTeams) {
-		// 	for(Game game: playerGames){
-		// 		if(wonGames.contains(game)){
-		// 			gameIDGoalReserviorException.add(game.getID());
-		// 		} 
-		// 	}
-		// }
+
 		for (Game wonGame : wonGames){
 			if(!nearestTeams.contains(wonGame.getID())){
 				int numPlayerGoals = wonGame.getNumPlayerGoals();
@@ -168,7 +123,6 @@ public class Player extends sim.Player {
 	public Game getGameFromOpponentID(Integer targetTeam, Map<Integer, List<Game>> opponentGamesMap, List<Game> playerGames, Integer round){
 		for(Game opponentGame: playerGames){
 			if(targetTeam.equals(opponentGame.getID())){
-//				System.out.println("HERE");
 				return opponentGame;
 			}
 		}
@@ -177,7 +131,6 @@ public class Player extends sim.Player {
 
 	public List<Integer> sortGamesByAverageRanking(Map<Integer, Double> currentRankingAverages) {
 		Double g4Ranking = currentRankingAverages.get(this.teamID);
-//		Map<Integer, Double> unsortedMap = new HashMap<>(currentRankingAverages);
 		LinkedHashMap<Integer, Double> sortedMap = new LinkedHashMap<>();
 		sortedMap.remove(this.teamID);
 		Set<Integer> keys = sortedMap.keySet();
@@ -217,8 +170,6 @@ public class Player extends sim.Player {
 		int highestRankTeam = 0;
 		int lowestRankTeam = 0;
 		Map<Integer, Double> currentAverages = gameHistory.getAllAverageRankingsMap().get(round - 1);
-		//List<Double> highRankedTeams = new ArrayList<Double>();
-		//List<Double> lowRankedTeams = new ArrayList<Double>();
 		double playerRank = currentAverages.get(teamId);
 		int goalsTakenFromLowest = 0;
 		int numGoalsToReallocate = 0;
@@ -328,9 +279,6 @@ public class Player extends sim.Player {
 			int numPlayerGoals = game.getNumPlayerGoals();
 			int numOpponentGoals = game.getNumOpponentGoals();
 			this.goalBank += numPlayerGoals - numOpponentGoals - 1;
-			// System.out.println(game.getID() + ": " + this.goalBank + " " + numPlayerGoals
-			// + " " + numOpponentGoals);
-
 		}
 	}
 
