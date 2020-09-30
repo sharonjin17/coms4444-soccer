@@ -2,6 +2,7 @@ package g2;
 
 import java.util.*;
 
+import g2.MultipleLinearRegression;
 import sim.Game;
 import sim.GameHistory;
 import sim.SimPrinter;
@@ -32,6 +33,93 @@ public Player(Integer teamID, Integer rounds, Integer seed, SimPrinter simPrinte
 *
 */
 public List<Game> reallocate(Integer round, GameHistory gameHistory, List<Game> playerGames, Map<Integer, List<Game>> opponentGamesMap) {
+	if(round < 25) return treeReallocation(round, gameHistory, playerGames, opponentGamesMap);
+	if(round > 100) return rankReallocation(round, gameHistory, playerGames, opponentGamesMap);
+	return regressionReallocation(round, gameHistory, playerGames, opponentGamesMap);
+}
+
+private List<Game> rankReallocation(Integer round, GameHistory gameHistory, List<Game> playerGames, Map<Integer, List<Game>> opponentGamesMap) {
+	List<Game> reallocatedPlayerGames = new ArrayList<>();
+
+	Map<Integer, Double> rankedMap = new HashMap<Integer, Double>();
+	Map<Integer, String> rankedMapS = new HashMap<Integer, String>();
+
+	List<Game> wonGames = getWinningGames(playerGames);
+	List<Game> drawnGames = getDrawnGames(playerGames);
+	List<Game> lostGames = getLosingGames(playerGames);
+
+	List<Game> lostOrDrawnGamesWithReallocationCapacity = new ArrayList<>(lostGames);
+	lostOrDrawnGamesWithReallocationCapacity.addAll(drawnGames);
+	for(Game lostGame : lostGames) {
+		if (lostGame.maxPlayerGoalsReached()) {
+			lostOrDrawnGamesWithReallocationCapacity.remove(lostGame);
+		}
+	}
+	for(Game drawnGame : drawnGames) {
+		if (drawnGame.maxPlayerGoalsReached()) {
+			lostOrDrawnGamesWithReallocationCapacity.remove(drawnGame);
+		}
+	}
+
+	if(!gameHistory.getAllGamesMap().isEmpty() && !gameHistory.getAllAverageRankingsMap().isEmpty()) {
+		List<Double> averageRank = new ArrayList<Double>(gameHistory.getAllAverageRankingsMap().get(round-1).values());
+		for(int i = 0; i < 9; i++) {
+			int opoID = i;
+			if(i >= teamID) opoID = opoID + 1;
+			Double opoRank = averageRank.get(opoID);
+			Double ourRank = averageRank.get(teamID);
+			rankedMap.put(gameHistory.getAllGamesMap().get(round - 1).get(teamID).get(i).getID(),(Math.abs(ourRank-opoRank)));
+			rankedMapS.put(gameHistory.getAllGamesMap().get(round - 1).get(teamID).get(i).getID(),gameHistory.getAllGamesMap().get(round - 1).get(teamID).get(i).getScoreAsString());
+		}
+	}
+
+	Comparator<Game> rangeComparatorWon = (Game g1, Game g2) ->
+	{return (g1.getNumPlayerGoals()-g1.getNumOpponentGoals()) - (g2.getNumPlayerGoals()-g2.getNumOpponentGoals());};
+	Comparator<Game> rangeComparatorRank = (Game g1, Game g2) ->
+	{return (int) Math.round((rankedMap.get(g1.getID()) - rankedMap.get(g2.getID()))*1000);};
+
+	Collections.sort(wonGames, rangeComparatorWon.reversed());
+
+	Collections.sort(lostOrDrawnGamesWithReallocationCapacity, rangeComparatorRank.reversed());
+
+	int i = 0;
+	for(Game lossOrDrew : lostOrDrawnGamesWithReallocationCapacity) {
+		int rangeWon = Math.min((wonGames.get(i).getNumPlayerGoals()-wonGames.get(i).getNumOpponentGoals()),
+				wonGames.get(i).getHalfNumPlayerGoals());
+		int rangeLD = lossOrDrew.getNumOpponentGoals() - lossOrDrew.getNumPlayerGoals();
+		if(rangeLD < rangeWon && lossOrDrew.getNumPlayerGoals() + rangeLD + 1 <= 8) {
+			lossOrDrew.setNumPlayerGoals(lossOrDrew.getNumPlayerGoals() + rangeLD + 1);
+			wonGames.get(i).setNumPlayerGoals(wonGames.get(i).getNumPlayerGoals() - rangeLD - 1);
+			i += 1;
+		}
+	}
+
+	Collections.sort(lostOrDrawnGamesWithReallocationCapacity, rangeComparatorWon);
+	Collections.sort(wonGames, rangeComparatorWon.reversed());
+
+	i = 0;
+	for(Game lossOrDrew : lostOrDrawnGamesWithReallocationCapacity) {
+		int rangeWon = Math.min((wonGames.get(i).getNumPlayerGoals()-wonGames.get(i).getNumOpponentGoals()),
+				wonGames.get(i).getHalfNumPlayerGoals());
+		int rangeLD = lossOrDrew.getNumOpponentGoals() - lossOrDrew.getNumPlayerGoals();
+		if(rangeLD < rangeWon && lossOrDrew.getNumPlayerGoals() + rangeLD + 1 <= 8) {
+			lossOrDrew.setNumPlayerGoals(lossOrDrew.getNumPlayerGoals() + rangeLD + 1);
+			wonGames.get(i).setNumPlayerGoals(wonGames.get(i).getNumPlayerGoals() - rangeLD - 1);
+			i += 1;
+		}
+	}
+
+	reallocatedPlayerGames.addAll(wonGames);
+	reallocatedPlayerGames.addAll(drawnGames);
+	reallocatedPlayerGames.addAll(lostGames);
+
+	if(checkConstraintsSatisfied(playerGames, reallocatedPlayerGames)) {
+		return reallocatedPlayerGames;
+	}
+	return playerGames;
+}
+
+private List<Game> treeReallocation(Integer round, GameHistory gameHistory, List<Game> playerGames, Map<Integer, List<Game>> opponentGamesMap) {
 
 
 	int goalsToReallocate = 0;
@@ -409,18 +497,6 @@ public List<Game> reallocate(Integer round, GameHistory gameHistory, List<Game> 
 	for (Game game : targetList)
 		simPrinter.println("TARGET LIST: " + game.getID() + " " + game.getScoreAsString());
 	simPrinter.println("POSSIBLE: " + possibleGoals + " NEEDED: " + neededGoals + " EXCESS: " + excessGoals);
-	/**
-	*	TO DO:if targetList doesn't have enough points to "fix itself", we'll
-	*	consider reallocating points from our finalList games in the following order:
-		0.  if excess goals remain, first try to use them for a win in targetList.
-	* 	1.	For all draws in target list, realloc one point from any game in finalList 
-	*		that has margin >2, then if none, take from win with margin >1. if none, forget it. 
-	*	2.  survey losses in targeList up to margin i; for each loss with margin i, find win 
-	*		in finalList with win margin > i + 2, and realloc 2 points to loss in targetList.
-	*		if no such win exists, look for win with margin i + 1 and realloc 2 points to 
-	*		loss in targetList.
-	*
-	*/		
 	if (neededGoals > possibleGoals){
 		//farm for possible goals first
 		if (possibleGoals > 0){
@@ -568,7 +644,7 @@ public List<Game> reallocate(Integer round, GameHistory gameHistory, List<Game> 
 		simPrinter.println("CONSTRAINS G2G: " + round);
 		return finalList;
 	}
-	simPrinter.println(checkConstraintsSatisfied2(playerGames, finalList));
+	simPrinter.println(checkConstraintsSatisfiedTest(playerGames, finalList));
 	for (Game game : playerGames){
 		simPrinter.println("Game " + game.getID() + ": " +game.getScoreAsString());
 		for (Game fgame : finalList)
@@ -579,60 +655,202 @@ public List<Game> reallocate(Integer round, GameHistory gameHistory, List<Game> 
 	return playerGames;
 }
 
-public static String checkConstraintsSatisfied2(List<Game> originalPlayerGames, List<Game> reallocatedPlayerGames) {
-		
-		Map<Integer, Game> originalPlayerGamesMap = new HashMap<>();
-		for(Game originalPlayerGame : originalPlayerGames)
-			originalPlayerGamesMap.put(originalPlayerGame.getID(), originalPlayerGame);
-		Map<Integer, Game> reallocatedPlayerGamesMap = new HashMap<>();
-		for(Game reallocatedPlayerGame : reallocatedPlayerGames)
-			reallocatedPlayerGamesMap.put(reallocatedPlayerGame.getID(), reallocatedPlayerGame);
-		
-		int totalNumOriginalPlayerGoals = 0, totalNumReallocatedPlayerGoals = 0;
-		for(Game originalPlayerGame : originalPlayerGames) {			
-			if(!reallocatedPlayerGamesMap.containsKey(originalPlayerGame.getID()))
-				continue;
-			Game reallocatedPlayerGame = reallocatedPlayerGamesMap.get(originalPlayerGame.getID());
-			boolean isOriginalWinningGame = hasWonGame(originalPlayerGame);
-			boolean isOriginalLosingGame = hasLostGame(originalPlayerGame);
-			boolean isOriginalDrawnGame = hasDrawnGame(originalPlayerGame);
-			
-			// Constraint 1
-			if(reallocatedPlayerGame.getNumPlayerGoals() < 0 || reallocatedPlayerGame.getNumPlayerGoals() > Game.getMaxGoalThreshold())
-				return "CONSTRAINT 1";
+private List<Game> regressionReallocation(Integer round, GameHistory gameHistory, List<Game> playerGames, Map<Integer, List<Game>> opponentGamesMap) {
+	List<Game> reallocatedPlayerGames = new ArrayList<>();
+	Map<Integer, MultipleLinearRegression> regressionMap = new HashMap<Integer, MultipleLinearRegression>();
 
-			// Constraint 2
-			if(!originalPlayerGame.getNumOpponentGoals().equals(reallocatedPlayerGame.getNumOpponentGoals()))
-				return "CONSTRAINT 2";
-		
-			// Constraint 3
-			boolean numPlayerGoalsIncreased = reallocatedPlayerGame.getNumPlayerGoals() > originalPlayerGame.getNumPlayerGoals();
-			if(isOriginalWinningGame && numPlayerGoalsIncreased)
-				return "CONSTRAINT 3";
+	List<Game> wonGames = getWinningGames(playerGames);
+	List<Game> drawnGames = getDrawnGames(playerGames);
+	List<Game> lostGames = getLosingGames(playerGames);
 
-			// Constraint 4
-			int halfNumPlayerGoals = originalPlayerGame.getHalfNumPlayerGoals();
-			boolean numReallocatedPlayerGoalsLessThanHalf = 
-					reallocatedPlayerGame.getNumPlayerGoals() < (originalPlayerGame.getNumPlayerGoals() - halfNumPlayerGoals);
-			if((isOriginalWinningGame || isOriginalDrawnGame) && numReallocatedPlayerGoalsLessThanHalf)
-				return "CONSTRAINT 4";
-			
-			totalNumOriginalPlayerGoals += originalPlayerGame.getNumPlayerGoals();
-			totalNumReallocatedPlayerGoals += reallocatedPlayerGame.getNumPlayerGoals();
-			
-			// Constraint 5
-			boolean numPlayerGoalsDecreased = reallocatedPlayerGame.getNumPlayerGoals() < originalPlayerGame.getNumPlayerGoals();
-			if(isOriginalLosingGame && numPlayerGoalsDecreased)
-				return "CONSTRAINT 5";
-			
-		}
-		
-		// Constraint 6
-		if(totalNumOriginalPlayerGoals != totalNumReallocatedPlayerGoals)
-			return "CONSTRAINT 6";
-			
-		return "CONSTRAINTS PASSED";
+	int goalBank = 0;
+
+	for(Game game : wonGames) {
+		goalBank += game.getHalfNumPlayerGoals();
 	}
+	for(Game game : drawnGames) {
+		goalBank += game.getHalfNumPlayerGoals();
+	}
+
+	for(Game game : playerGames) {
+		regressionMap.put(game.getID(), getTeamRegression(round, gameHistory, game.getID()));
+	}
+
+	Comparator<Game> R2Comparator = (Game g1, Game g2) ->
+	{return (int) Math.round((regressionMap.get(g1.getID()).R2() - regressionMap.get(g2.getID()).R2())*1000);};
+
+	Collections.sort(lostGames, R2Comparator.reversed());
+	Collections.sort(drawnGames, R2Comparator.reversed());
+
+	int usedGoals = 0;
+	int margin = 1;
+	int maxMargin = 2;
+	double accuracyThresh = 0.75;
+	double accuracyMax = 0.95;
+	int discrete = 0;
+	for(Game game : lostGames) {
+		int range = Math.abs(game.getNumPlayerGoals()-game.getNumOpponentGoals());
+		if(game.getNumPlayerGoals() < game.getNumOpponentGoals()) discrete=0;
+		if(game.getNumPlayerGoals() > game.getNumOpponentGoals()) discrete=3;
+		if(game.getNumPlayerGoals() == game.getNumOpponentGoals()) discrete=1;
+		int prediction = (int)Math.round(regressionMap.get(game.getID()).beta(0) + regressionMap.get(game.getID()).beta(1) * game.getNumOpponentGoals()
+				+ regressionMap.get(game.getID()).beta(2) * game.getNumPlayerGoals() + regressionMap.get(game.getID()).beta(3) * discrete);
+		int newScore = Math.max(prediction + margin, game.getNumPlayerGoals());
+		System.out.println("ANTES DERROTA: " + game.getScoreAsString());
+		if(newScore == prediction + margin) {
+			if(regressionMap.get(game.getID()).R2() >= accuracyMax &&
+					goalBank > (newScore - game.getNumPlayerGoals()) && (newScore) <= 8) {
+				goalBank -= (newScore - game.getNumPlayerGoals());
+				usedGoals += (newScore - game.getNumPlayerGoals());
+				game.setNumPlayerGoals(newScore);
+			}
+			else if(goalBank > (newScore - game.getNumPlayerGoals()) && (newScore) <= 8
+					&& (range < maxMargin) && regressionMap.get(game.getID()).R2() > accuracyThresh) {
+				goalBank -= (newScore - game.getNumPlayerGoals());
+				usedGoals += (newScore - game.getNumPlayerGoals());
+				game.setNumPlayerGoals(newScore);
+			}
+		}
+		System.out.println("DEPOIS DERROTA: "+ game.getScoreAsString());
+	}
+	for(Game game : drawnGames) {
+		int range = Math.abs(game.getNumPlayerGoals()-game.getNumOpponentGoals());
+		if(game.getNumPlayerGoals() < game.getNumOpponentGoals()) discrete=0;
+		else if(game.getNumPlayerGoals() > game.getNumOpponentGoals()) discrete=3;
+		else if(game.getNumPlayerGoals() == game.getNumOpponentGoals()) discrete=1;
+		int prediction = (int)Math.round(regressionMap.get(game.getID()).beta(0) + regressionMap.get(game.getID()).beta(1) * game.getNumOpponentGoals()
+				+ regressionMap.get(game.getID()).beta(2) * game.getNumPlayerGoals() + regressionMap.get(game.getID()).beta(3) * discrete);
+		System.out.println("ANTES EMPATE: " + game.getScoreAsString());
+		if(usedGoals > 0) {
+			int takeOut = Math.min(usedGoals, game.getHalfNumPlayerGoals());
+			usedGoals -= takeOut;
+			game.setNumPlayerGoals(game.getNumPlayerGoals()-takeOut);
+		}
+		int newScore = Math.max(prediction + margin, game.getNumPlayerGoals());
+		if(newScore == prediction + margin) {
+			if(regressionMap.get(game.getID()).R2() >= accuracyMax &&
+					goalBank > (newScore - game.getNumPlayerGoals()) && (newScore) <= 8) {
+				goalBank -= (newScore - game.getNumPlayerGoals());
+				usedGoals += (newScore - game.getNumPlayerGoals());
+				game.setNumPlayerGoals(newScore);
+			}
+			else if(goalBank > (newScore - game.getNumPlayerGoals()) && (newScore) <= 8
+					&& (range < maxMargin) && regressionMap.get(game.getID()).R2() > accuracyThresh) {
+				goalBank -= (newScore - game.getNumPlayerGoals());
+				usedGoals += (newScore - game.getNumPlayerGoals());
+				game.setNumPlayerGoals(newScore);
+			}
+		}
+		System.out.println("DEPOIS EMPATE: "+ game.getScoreAsString());
+	}
+
+	Comparator<Game> goalsComparatorWon = (Game g1, Game g2) ->
+	{return (g1.getNumPlayerGoals()) - (g2.getNumPlayerGoals());};
+
+	Collections.sort(wonGames, goalsComparatorWon.reversed());
+
+	for(Game game : wonGames) {
+		int range = Math.abs(game.getNumPlayerGoals()-game.getNumOpponentGoals());
+		if(game.getNumPlayerGoals() < game.getNumOpponentGoals()) discrete=0;
+		else if(game.getNumPlayerGoals() > game.getNumOpponentGoals()) discrete=3;
+		else if(game.getNumPlayerGoals() == game.getNumOpponentGoals()) discrete=1;
+		int prediction = (int)Math.round(regressionMap.get(game.getID()).beta(0) + regressionMap.get(game.getID()).beta(1) * game.getNumOpponentGoals()
+				+ regressionMap.get(game.getID()).beta(2) * game.getNumPlayerGoals() + regressionMap.get(game.getID()).beta(3) * discrete);
+		System.out.println("ANTES VITORIA: " + game.getScoreAsString());
+		if(usedGoals > 0) {
+			int takeOut = Math.min(usedGoals, game.getHalfNumPlayerGoals());
+			usedGoals -= takeOut;
+			game.setNumPlayerGoals(game.getNumPlayerGoals()-takeOut);
+		}
+		System.out.println("DEPOIS VITORIA: " + game.getScoreAsString());
+	}
+
+	reallocatedPlayerGames.addAll(wonGames);
+	reallocatedPlayerGames.addAll(drawnGames);
+	reallocatedPlayerGames.addAll(lostGames);
+
+	System.out.println(checkConstraintsSatisfiedTest(playerGames,reallocatedPlayerGames));
+
+	if(checkConstraintsSatisfied(playerGames, reallocatedPlayerGames)) {
+		return reallocatedPlayerGames;
+	}
+	return playerGames;
+}
+
+public static String checkConstraintsSatisfiedTest(List<Game> originalPlayerGames, List<Game> reallocatedPlayerGames) {
+	Map<Integer, Game> originalPlayerGamesMap = new HashMap<>();
+	for(Game originalPlayerGame : originalPlayerGames)
+		originalPlayerGamesMap.put(originalPlayerGame.getID(), originalPlayerGame);
+	Map<Integer, Game> reallocatedPlayerGamesMap = new HashMap<>();
+	for(Game reallocatedPlayerGame : reallocatedPlayerGames)
+		reallocatedPlayerGamesMap.put(reallocatedPlayerGame.getID(), reallocatedPlayerGame);
+
+	int totalNumOriginalPlayerGoals = 0, totalNumReallocatedPlayerGoals = 0;
+	for(Game originalPlayerGame : originalPlayerGames) {
+		if(!reallocatedPlayerGamesMap.containsKey(originalPlayerGame.getID()))
+			continue;
+		Game reallocatedPlayerGame = reallocatedPlayerGamesMap.get(originalPlayerGame.getID());
+		boolean isOriginalWinningGame = hasWonGame(originalPlayerGame);
+		boolean isOriginalLosingGame = hasLostGame(originalPlayerGame);
+		boolean isOriginalDrawnGame = hasDrawnGame(originalPlayerGame);
+
+		// Constraint 1
+		if(reallocatedPlayerGame.getNumPlayerGoals() < 0 || reallocatedPlayerGame.getNumPlayerGoals() > Game.getMaxGoalThreshold())
+			return "CONSTRAINT 1";
+
+		// Constraint 2
+		if(!originalPlayerGame.getNumOpponentGoals().equals(reallocatedPlayerGame.getNumOpponentGoals()))
+			return "CONSTRAINT 2";
+		
+		// Constraint 3
+		boolean numPlayerGoalsIncreased = reallocatedPlayerGame.getNumPlayerGoals() > originalPlayerGame.getNumPlayerGoals();
+		if(isOriginalWinningGame && numPlayerGoalsIncreased)
+			return "CONSTRAINT 3";
+
+		// Constraint 4
+		int halfNumPlayerGoals = originalPlayerGame.getHalfNumPlayerGoals();
+		boolean numReallocatedPlayerGoalsLessThanHalf =
+				reallocatedPlayerGame.getNumPlayerGoals() < (originalPlayerGame.getNumPlayerGoals() - halfNumPlayerGoals);
+		if((isOriginalWinningGame || isOriginalDrawnGame) && numReallocatedPlayerGoalsLessThanHalf)
+			return "CONSTRAINT 4";
+			
+		totalNumOriginalPlayerGoals += originalPlayerGame.getNumPlayerGoals();
+		totalNumReallocatedPlayerGoals += reallocatedPlayerGame.getNumPlayerGoals();
+
+		// Constraint 5
+		boolean numPlayerGoalsDecreased = reallocatedPlayerGame.getNumPlayerGoals() < originalPlayerGame.getNumPlayerGoals();
+		if(isOriginalLosingGame && numPlayerGoalsDecreased)
+			return "CONSTRAINT 5";
+			
+	}
+		
+	// Constraint 6
+	if(totalNumOriginalPlayerGoals != totalNumReallocatedPlayerGoals) {
+		System.out.println(totalNumOriginalPlayerGoals + " : " + totalNumReallocatedPlayerGoals);
+		return "CONSTRAINT 6";
+	}
+	return "CONSTRAINTS PASSED";
+}
+public MultipleLinearRegression getTeamRegression(Integer round, GameHistory gameHistory, Integer id) {
+	double[][] x = new double[(round-1)*9][4];
+	for(int i = 0; i < round-1; i++) {
+		for(int j = 0; j < 9; j++) {
+			x[i*9+j][0]=1;
+			x[i*9+j][1]=gameHistory.getAllGamesMap().get(i).get(id).get(j).getScore().getNumPlayerGoals();
+			x[i*9+j][2]=gameHistory.getAllGamesMap().get(i).get(id).get(j).getScore().getNumOpponentGoals();
+			if(x[i*9+j][1] < x[i*9+j][2]) x[i*9+j][3]=0;
+			else if(x[i*9+j][1] > x[i*9+j][2]) x[i*9+j][3]=3;
+			else if(x[i*9+j][1] == x[i*9+j][2]) x[i*9+j][3]=1;
+		}
+	}
+	double[] y = new double[(round-1)*9];
+	for(int i = 1; i < round; i++) {
+		for (int j = 0; j < 9; j++) {
+			y[(i - 1) * 9 + j] = gameHistory.getAllGamesMap().get(i).get(id).get(j).getScore().getNumPlayerGoals();
+		}
+	}
+	return new MultipleLinearRegression(x, y);
+}
 private List<Game> getWinningGames(List<Game> playerGames) {
 	List<Game> winningGames = new ArrayList<>();
 	for(Game game : playerGames) {
@@ -643,7 +861,6 @@ private List<Game> getWinningGames(List<Game> playerGames) {
 	}
 	return winningGames;
 }
-
 private List<Game> getDrawnGames(List<Game> playerGames) {
 	List<Game> drawnGames = new ArrayList<>();
 	for(Game game : playerGames) {
@@ -654,7 +871,6 @@ private List<Game> getDrawnGames(List<Game> playerGames) {
 	}
 	return drawnGames;
 }
-
 private List<Game> getLosingGames(List<Game> playerGames) {
 	List<Game> losingGames = new ArrayList<>();
 	for(Game game : playerGames) {
