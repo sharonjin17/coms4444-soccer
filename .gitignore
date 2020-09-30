@@ -9,11 +9,11 @@
 src/*.class
 src/*/*.class
 
-# Makefile
-src/Makefile
-
 # Bin folder
 bin/
+
+# Makefile
+src/Makefile
 
 # Log file
 *.log
