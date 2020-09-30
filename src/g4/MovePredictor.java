@@ -15,14 +15,10 @@ public class MovePredictor {
         this.simPrinter = simPrinter;
     }
 
-    public void quickMethod(String str) {
-        simPrinter.println(str);
-    }
-
     public void trackData(Map<Integer, List<Game>> opponentGamesMap) {
         if (teamTrackers.size() == 0) {
             for (Map.Entry<Integer,List<Game>> entry : opponentGamesMap.entrySet()) {
-                TeamTracker teamTracker = new TeamTracker(entry.getKey(), entry.getValue());
+                TeamTracker teamTracker = new TeamTracker(entry.getKey(), entry.getValue(), simPrinter);
                 teamTrackers.put(entry.getKey(), teamTracker);
             }
         }
@@ -50,6 +46,29 @@ public class MovePredictor {
         int teamId = game.getID();
         TeamTracker teamTracker = teamTrackers.get(teamId);
         return teamTracker.getNextMoveProbs(game);
+    }
+
+    public List<Integer> getTeamsByAccuracy() {
+        PriorityQueue<TeamTracker> ttByAccuracyAsc = new PriorityQueue<TeamTracker>();
+        LinkedList<Integer> teamsByAccuracy = new LinkedList<Integer>();
+        for (Map.Entry<Integer, TeamTracker> ttEntry: teamTrackers.entrySet()) {
+            ttByAccuracyAsc.add(ttEntry.getValue());
+        }
+        while (!ttByAccuracyAsc.isEmpty()) {
+            teamsByAccuracy.addFirst(ttByAccuracyAsc.poll().getTeamId());
+        }
+        return teamsByAccuracy;
+    }
+
+    @Override
+    public String toString() {
+        String str = "## MovePredictor ##\n";
+        for (Map.Entry<Integer, TeamTracker> ttEntry: teamTrackers.entrySet()) {
+            TeamTracker tt = ttEntry.getValue();
+            str += tt.toString() + "\n";
+        }
+        str += "###################";
+        return str;
     }
 
     public void printOpponentGames(Map<Integer, List<Game>> opponentGamesMap) {
