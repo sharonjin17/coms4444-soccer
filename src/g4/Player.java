@@ -115,7 +115,11 @@ public class Player extends sim.Player {
 		//return leapfrogGames;
 		return reallocatedPlayerGames;
 	}
-
+    // algorithm #1:
+    // induce losses for similarly ranked teams
+    // risk losing to teams that are significantly higher or lower ranked
+	// don't use this algorithm when player is at a high mean rank
+	
 	public List<Game> reallocateLeapFrog(Integer round, GameHistory gameHistory, List<Game> playerGames,
 			Map<Integer, List<Game>> opponentGamesMap) {
 
@@ -161,9 +165,10 @@ public class Player extends sim.Player {
 		return playerGames;
 	}
 
-	public Game getGameFromOpponentID(int targetTeam, Map<Integer, List<Game>> opponentGamesMap, List<Game> playerGames, Integer round){
+	public Game getGameFromOpponentID(Integer targetTeam, Map<Integer, List<Game>> opponentGamesMap, List<Game> playerGames, Integer round){
 		for(Game opponentGame: playerGames){
-			if(targetTeam == (opponentGame.getID())){
+			if(targetTeam.equals(opponentGame.getID())){
+//				System.out.println("HERE");
 				return opponentGame;
 			}
 		}
