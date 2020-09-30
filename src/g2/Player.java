@@ -20,7 +20,7 @@ public class Player extends sim.Player {
 	public Player(Integer teamID, Integer rounds, Integer seed, SimPrinter simPrinter) {
 		super(teamID, rounds, seed, simPrinter);
 	}
-	
+
 	/**
 	* Reallocate player goals
 	*
@@ -695,7 +695,7 @@ public class Player extends sim.Player {
 			int prediction = (int)Math.round(regressionMap.get(game.getID()).beta(0) + regressionMap.get(game.getID()).beta(1) * game.getNumOpponentGoals()
 					+ regressionMap.get(game.getID()).beta(2) * game.getNumPlayerGoals() + regressionMap.get(game.getID()).beta(3) * discrete);
 			int newScore = Math.max(prediction + margin, game.getNumPlayerGoals());
-			System.out.println("ANTES DERROTA: " + game.getScoreAsString());
+			//System.out.println("ANTES DERROTA: " + game.getScoreAsString());
 			if(newScore == prediction + margin) {
 				if(regressionMap.get(game.getID()).R2() >= accuracyMax &&
 						goalBank > (newScore - game.getNumPlayerGoals()) && (newScore) <= 8) {
@@ -710,7 +710,7 @@ public class Player extends sim.Player {
 					game.setNumPlayerGoals(newScore);
 				}
 			}
-			System.out.println("DEPOIS DERROTA: "+ game.getScoreAsString());
+			//System.out.println("DEPOIS DERROTA: "+ game.getScoreAsString());
 		}
 		for(Game game : drawnGames) {
 			int range = Math.abs(game.getNumPlayerGoals()-game.getNumOpponentGoals());
@@ -719,7 +719,7 @@ public class Player extends sim.Player {
 			else if(game.getNumPlayerGoals() == game.getNumOpponentGoals()) discrete=1;
 			int prediction = (int)Math.round(regressionMap.get(game.getID()).beta(0) + regressionMap.get(game.getID()).beta(1) * game.getNumOpponentGoals()
 					+ regressionMap.get(game.getID()).beta(2) * game.getNumPlayerGoals() + regressionMap.get(game.getID()).beta(3) * discrete);
-			System.out.println("ANTES EMPATE: " + game.getScoreAsString());
+			//System.out.println("ANTES EMPATE: " + game.getScoreAsString());
 			if(usedGoals > 0) {
 				int takeOut = Math.min(usedGoals, game.getHalfNumPlayerGoals());
 				usedGoals -= takeOut;
@@ -740,7 +740,7 @@ public class Player extends sim.Player {
 					game.setNumPlayerGoals(newScore);
 				}
 			}
-			System.out.println("DEPOIS EMPATE: "+ game.getScoreAsString());
+			//System.out.println("DEPOIS EMPATE: "+ game.getScoreAsString());
 		}
 
 		Comparator<Game> goalsComparatorWon = (Game g1, Game g2) ->
@@ -755,20 +755,20 @@ public class Player extends sim.Player {
 			else if(game.getNumPlayerGoals() == game.getNumOpponentGoals()) discrete=1;
 			int prediction = (int)Math.round(regressionMap.get(game.getID()).beta(0) + regressionMap.get(game.getID()).beta(1) * game.getNumOpponentGoals()
 					+ regressionMap.get(game.getID()).beta(2) * game.getNumPlayerGoals() + regressionMap.get(game.getID()).beta(3) * discrete);
-			System.out.println("ANTES VITORIA: " + game.getScoreAsString());
+			//System.out.println("ANTES VITORIA: " + game.getScoreAsString());
 			if(usedGoals > 0) {
 				int takeOut = Math.min(usedGoals, game.getHalfNumPlayerGoals());
 				usedGoals -= takeOut;
 				game.setNumPlayerGoals(game.getNumPlayerGoals()-takeOut);
 			}
-			System.out.println("DEPOIS VITORIA: " + game.getScoreAsString());
+			//System.out.println("DEPOIS VITORIA: " + game.getScoreAsString());
 		}
 
 		reallocatedPlayerGames.addAll(wonGames);
 		reallocatedPlayerGames.addAll(drawnGames);
 		reallocatedPlayerGames.addAll(lostGames);
 
-		System.out.println(checkConstraintsSatisfiedTest(playerGames,reallocatedPlayerGames));
+		//System.out.println(checkConstraintsSatisfiedTest(playerGames,reallocatedPlayerGames));
 
 		if(checkConstraintsSatisfied(playerGames, reallocatedPlayerGames)) {
 			return reallocatedPlayerGames;
