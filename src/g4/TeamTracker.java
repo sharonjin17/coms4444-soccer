@@ -1,21 +1,30 @@
 package g4;
 
 import sim.Game;
+import sim.SimPrinter;
 
 import java.util.*;
 
-public class TeamTracker {
+public class TeamTracker implements Comparable<TeamTracker> {
     private int teamId;
     private double[][] pointChangeProbDist;
     // point difference => change in player points next game
     private Map<Integer, ArrayList<Move>> rawPointChangeData;
     private Map<Integer, Game> pastGames;
+    private SimPrinter simPrinter;
+    private int correctPredictions;
+    private int predictions;
+    private double accuracy;
 
-    public TeamTracker(Integer teamId, List<Game> games) {
+    public TeamTracker(Integer teamId, List<Game> games, SimPrinter simPrinter) {
         this.teamId = teamId;
         this.pointChangeProbDist = initPointChangeProbDist();
         this.rawPointChangeData = new HashMap<Integer, ArrayList<Move>>();
         this.pastGames = new HashMap<Integer, Game>();
+        this.simPrinter = simPrinter;
+        this.correctPredictions = 0;
+        this.predictions = 0;
+        this.accuracy = 0.0;
         for (Game game : games) {
             this.pastGames.put(game.getID(), game);
         }
@@ -31,13 +40,49 @@ public class TeamTracker {
         return actionProbs;
     }
 
+    public Move getMostProbableNextMove(Game game) {
+        Map<Move, Double> nextMoveProbs = getNextMoveProbs(game);
+        Move nextMove = Move.NO_CHANGE;
+        double prob = 0;
+        for (Map.Entry<Move, Double> entry : nextMoveProbs.entrySet()) {
+            if (entry.getValue() > prob) {
+                nextMove = entry.getKey();
+                prob = entry.getValue();
+            }
+        }
+        return nextMove;
+    }
+
     public void trackRound(List<Game> games) {
         Set<Integer> updated = new HashSet<Integer>();
         for (Game game : games) {
+            predictions++;
+            recalculateAccuracy(game);
             int pointDiff = collectGameData(game);
             updated.add(pointDiff);
         }
         recalcPointChangeProbs(updated);
+    }
+
+    public double getAccuracy() {
+        return (correctPredictions * 1.0)/predictions;
+    }
+
+    private void recalculateAccuracy(Game game) {
+        Game pastGame = pastGames.get(game.getID());
+        int numPointsChanged = game.getNumPlayerGoals() - pastGame.getNumPlayerGoals();
+        Move move = Move.NO_CHANGE;
+        if (numPointsChanged > 0) {
+            move = Move.INCREASE;
+        }
+        else if (numPointsChanged < 0) {
+            move = Move.DECREASE;
+        }
+
+        if (getMostProbableNextMove(pastGame) == move) {
+            correctPredictions++;
+        }
+        accuracy = (correctPredictions * 1.0)/predictions;
     }
 
     // returns the game point difference
@@ -53,6 +98,7 @@ public class TeamTracker {
             move = Move.DECREASE;
         }
 
+        // recalc probabilities based on current move and previous point diff
         int pointDiff = pastGame.getNumPlayerGoals() - pastGame.getNumOpponentGoals();
         if (!rawPointChangeData.containsKey(pointDiff)) {
             ArrayList<Move> changes = new ArrayList<Move>();
@@ -104,5 +150,22 @@ public class TeamTracker {
             initialPD[i][2] = 0.5; // prob subtract when player is winning
         }
         return initialPD;
+    }
+
+    @Override
+    public int compareTo(TeamTracker otherTt) {
+        return Double.compare(this.getAccuracy(), otherTt.getAccuracy());
+    }
+
+    @Override
+    public String toString() {
+        String str = "TeamID: " + Integer.toString(teamId) + ", ";
+        str += "Predictions: " + Integer.toString(predictions) + ", ";
+        str += "Accuracy: " + Double.toString(getAccuracy());
+        return str;
+    }
+
+    public int getTeamId() {
+        return teamId;
     }
 }
