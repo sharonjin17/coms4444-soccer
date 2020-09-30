@@ -28,14 +28,18 @@ public class Player extends sim.Player {
 	public List<Game> reallocate(Integer round, GameHistory gameHistory, List<Game> playerGames,
 			Map<Integer, List<Game>> opponentGamesMap) {
 
-		Map<Integer, Double> rankings = gameHistory.getAllAverageRankingsMap().get(currRound-1);
+		//System.out.println("Round: " + round);
+
+		Map<Integer, Double> rankings = gameHistory.getAllAverageRankingsMap().get(currRound);
 		if (!tableInitialized) {
+			//System.out.println("Initializing expectation table...");
 			initializeExpectationTable(opponentGamesMap); //Initialize expectationTable
 			preOpponentGamesMap = opponentGamesMap;
 			tableInitialized = true;
 			
 		}
 		else {
+			//System.out.println("Updating expectation table...");
 			updateExpectationTable(opponentGamesMap, rankings); //Update expectationTable
 			preOpponentGamesMap = opponentGamesMap;
 		}
@@ -44,13 +48,21 @@ public class Player extends sim.Player {
 		//An example of how to use the expectation map
 		//Note: extract goals BEFORE update opponent goals with expectation table, since new match scores will bring different wins and loses
 		int excessGoals = 0;
+
+		//keep a copy of PlayerGames before reallocation to call checkConstraintsSatisfied()
+		//List<Game> prevPlayerGames = new ArrayList<Game>();
+		//for (Game g: playerGames) {
+        //    prevPlayerGames.add(g.cloneGame());
+        //}
+        //System.out.println("Cloning finished");
+
 		List<Game> clonePlayerGames = new ArrayList<Game>();
 		for (Game g: playerGames) {
             clonePlayerGames.add(g.cloneGame());
         }
 		
-		
 
+        //System.out.println("start Updating excessgoals");
         for (Game game : clonePlayerGames) {
             int playerGoals = game.getNumPlayerGoals();
             int margin = playerGoals - game.getNumOpponentGoals();
@@ -61,7 +73,7 @@ public class Player extends sim.Player {
                 game.setNumPlayerGoals(playerGoals-subtract);
             }
         }
-        
+        //System.out.println("Excess goals: " + excessGoals);
         
 		
         //Note: make a fresh new clone from the playerGames, don't use the one that extract all the scores
@@ -90,6 +102,7 @@ public class Player extends sim.Player {
 		
 		//Sort clonePlayerGames by margin between player and opponent goals
         clonePlayerGames.sort(Comparator.comparing(g -> (g.getNumOpponentGoals() - g.getNumPlayerGoals())));
+
 
         //Allocate goals
 		for (Game g: clonePlayerGames) {
@@ -122,6 +135,10 @@ public class Player extends sim.Player {
 		    }
 		}
 		
+		//if(!checkConstraintsSatisfied(prevPlayerGames, playerGames)){
+		//	System.out.println("Constraints NOT satisfied");
+		//}
+		
 		return playerGames;
 	}
 	
@@ -147,6 +164,7 @@ public class Player extends sim.Player {
 			}
 			expectationTable.put(teamID, value);
 		}
+		//System.out.println("Expectation table initialized");
 	}
 	
 	/**
@@ -160,8 +178,10 @@ public class Player extends sim.Player {
 	private void updateExpectationTable(Map<Integer, List<Game>> opponentGamesMap, Map<Integer, Double> rankings) {
 		
 		for (Integer teamID : opponentGamesMap.keySet()) {
+			//System.out.println("Team: " + teamID);
 			List<Game> currOpponentGamesList = opponentGamesMap.get(teamID);
 			List<Game> preOpponentGamesList = preOpponentGamesMap.get(teamID);
+			//System.out.println("ranking: ");
 			double teamRank = rankings.get(teamID);
 			for (int i=0; i<currOpponentGamesList.size(); i++) {
 				Game currGame = currOpponentGamesList.get(i);
@@ -173,6 +193,7 @@ public class Player extends sim.Player {
 				expectationTable.get(teamID).get(key).add(currGame.getNumPlayerGoals()); 
 			}
 		}
+		//System.out.println("Expectation table updated!");
 	}
 	
 	/**
