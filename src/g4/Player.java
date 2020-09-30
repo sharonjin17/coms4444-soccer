@@ -2,6 +2,7 @@ package g4;
 
 import java.util.*;
 import java.lang.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 import sim.Game;
 import sim.GameHistory;
@@ -100,7 +101,7 @@ public class Player extends sim.Player {
 			}
 		}
 		for(Integer targetTeam: nearestTeams){
-			Game currentGame = getGameFromOpponentID(targetTeam, opponentGamesMap, playerGames, round);
+			Game currentGame = getGameFromOpponentID(targetTeam, playerGames);
 			
 			int lostBy = currentGame.getNumOpponentGoals() - currentGame.getNumPlayerGoals();
 			int goalsToAdd = lostBy + 1;
@@ -120,13 +121,17 @@ public class Player extends sim.Player {
 		return playerGames;
 	}
 
-	public Game getGameFromOpponentID(Integer targetTeam, Map<Integer, List<Game>> opponentGamesMap, List<Game> playerGames, Integer round){
-		for(Game opponentGame: playerGames){
-			if(targetTeam.equals(opponentGame.getID())){
-				return opponentGame;
+	public Game getGameFromOpponentID(int tid, List<Game> games){
+		for (Game game: games) {
+			if (game.getID().equals(tid)) {
+				return game;
 			}
 		}
-		return null;
+		simPrinter.println("error: could not find game for " + Integer.toString(tid));
+		int randomIndex = ThreadLocalRandom.current().nextInt(1, games.size());
+		Game randomGame = games.get(randomIndex);
+		simPrinter.println("selected random game against team " + randomGame.getID().toString());
+		return randomGame;
 	}
 
 	public List<Integer> sortGamesByAverageRanking(Map<Integer, Double> currentRankingAverages) {
@@ -185,8 +190,8 @@ public class Player extends sim.Player {
  		highestRankTeam = rankList.get(0);
  		lowestRankTeam = rankList.get(rankList.size() - 1);
 
-		Game lowestRankGame = getGameFromOpponentID(lowestRankTeam, opponentGamesMap, playerGames, round);
-		Game highestRankGame = getGameFromOpponentID(highestRankTeam, opponentGamesMap, playerGames, round);
+		Game lowestRankGame = getGameFromOpponentID(lowestRankTeam, playerGames);
+		Game highestRankGame = getGameFromOpponentID(highestRankTeam, playerGames);
 
 		for (Game winningGame : wonGames) {
 			if (lowestRankGame.getID().equals(winningGame.getID())) {
