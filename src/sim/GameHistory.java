@@ -15,6 +15,7 @@ public class GameHistory implements Serializable {
 	private Map<Integer, Map<Integer, PlayerPoints>> allRoundPointsMap = new HashMap<>();
 	private Map<Integer, Map<Integer, PlayerPoints>> allCumulativePointsMap = new HashMap<>();
 	
+		
 	public Map<Integer, Map<Integer, Double>> getAllRoundRankingsMap() {
 		return allRoundRankingsMap;
 	}

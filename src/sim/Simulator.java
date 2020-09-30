@@ -285,8 +285,9 @@ public class Simulator {
 					}
 					
 					for(PlayerWrapper playerWrapper : playerWrappers) {
+						String tabs = playerWrapper.getPlayerName().length() < 5 ? "\t\t" : "\t";
 						if(playerWrapper.getPlayer().teamID.equals(teamID)) {
-							Log.writeToVerboseLogFile(playerWrapper.getPlayerName() + "\t" + 
+							Log.writeToVerboseLogFile(playerWrapper.getPlayerName() + tabs + 
 											   rankFormat.format(orderedRoundRankingsMap.get(teamID)) + "\t\t" +
 											   rankFormat.format(roundAverageRankingsMap.get(teamID)) + "\t\t" +
 											   roundPointsMap.get(teamID) + "\t\t" +
@@ -347,8 +348,9 @@ public class Simulator {
 			}
 			
 			for(PlayerWrapper playerWrapper : playerWrappers) {
+				String tabs = playerWrapper.getPlayerName().length() < 5 ? "\t\t" : "\t";
 				if(playerWrapper.getPlayer().teamID.equals(teamID)) {
-					Log.writeToLogFile(playerWrapper.getPlayerName() + "\t" + 
+					Log.writeToLogFile(playerWrapper.getPlayerName() + tabs + 
 									   rankFormat.format(finalRankingsMap.get(teamID)) + "\t\t" +
 									   finalCumulativePointsMap.get(teamID) + "\t\t" +
 									   (numWins + numLosses + numDraws) + "\t" +
