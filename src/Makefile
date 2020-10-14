@@ -1,8 +1,8 @@
 run:
-	java -cp .:org.json.jar sim.Simulator --teams random random random random random random random random random random -r 10 -s 10 -l log.txt -e games.csv
+	java -cp .:org.json.jar sim.Simulator --teams g1 random g2 random g3 random g4 random g5 random -r 10 -s 10 -l log.txt -e games.csv
 
 gui:
-	java -cp .:org.json.jar sim.Simulator --teams random random random random random random random random random random -r 10 -s 10 -f 15 --gui -c -l log.txt -e games.csv
+	java -cp .:org.json.jar sim.Simulator --teams g4 random random random random random random random random random -r 50 -s 50 -f 15 --gui -c -l log.txt -e games.csv
 
 compile:
 	javac -cp .:org.json.jar */*.java
